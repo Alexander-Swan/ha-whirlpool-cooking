@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from inspect import isawaitable
-import logging
 from typing import Any
 
 from aiohttp import ClientSession
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant

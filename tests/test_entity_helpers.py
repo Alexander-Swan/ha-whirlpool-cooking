@@ -6,7 +6,6 @@ import sys
 
 import pytest
 
-
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 14),
     reason="Home Assistant test runtime requires Python 3.14",

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from importlib import import_module
 import sys
+from importlib import import_module
 
 import pytest
-
 
 MODULES = (
     "custom_components.whirlpool_cooking",

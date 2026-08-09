@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
 import sys
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 pytestmark = [
     pytest.mark.skipif(

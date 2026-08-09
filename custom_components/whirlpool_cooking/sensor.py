@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -52,7 +53,11 @@ SENSORS: tuple[WhirlpoolSensorDescription, ...] = (
     WhirlpoolSensorDescription(
         key="time_remaining",
         translation_key="time_remaining",
-        value_fn=lambda appliance: _value(appliance, "time_remaining", "remaining_time"),
+        value_fn=lambda appliance: _value(
+            appliance,
+            "time_remaining",
+            "remaining_time",
+        ),
     ),
 )
 

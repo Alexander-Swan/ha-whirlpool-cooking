@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -30,7 +31,9 @@ BINARY_SENSORS: tuple[WhirlpoolBinarySensorDescription, ...] = (
         key="door",
         translation_key="door",
         device_class=BinarySensorDeviceClass.DOOR,
-        value_fn=lambda appliance: _as_bool(_value(appliance, "door_open", "is_door_open")),
+        value_fn=lambda appliance: _as_bool(
+            _value(appliance, "door_open", "is_door_open"),
+        ),
     ),
     WhirlpoolBinarySensorDescription(
         key="online",

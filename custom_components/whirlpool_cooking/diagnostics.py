@@ -29,7 +29,9 @@ async def async_get_config_entry_diagnostics(
             "region": entry.data.get("region"),
             "username": "***",
         },
-        "appliances": [_describe_appliance(appliance) for appliance in coordinator.data],
+        "appliances": [
+            _describe_appliance(appliance) for appliance in coordinator.data
+        ],
     }
 
 
@@ -56,7 +58,12 @@ def _describe_appliance(appliance: Any) -> dict[str, Any]:
         "said": "***",
         "name": _read(appliance, "name", "appliance_name"),
         "model": _read(appliance, "model", "model_number"),
-        "data_model": _read(appliance, "data_model", "data_model_key", "DATA_MODEL_KEY"),
+        "data_model": _read(
+            appliance,
+            "data_model",
+            "data_model_key",
+            "DATA_MODEL_KEY",
+        ),
         "type": type(appliance).__name__,
         "available_attributes": sorted(
             name
