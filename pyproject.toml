@@ -1,0 +1,21 @@
+[project]
+name = "ha-whirlpool-cooking"
+version = "0.1.0"
+description = "Home Assistant custom integration for Whirlpool-family cooking appliances"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+classifiers = [
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Home Automation",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "N", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

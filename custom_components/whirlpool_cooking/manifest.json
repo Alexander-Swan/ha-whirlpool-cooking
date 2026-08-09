@@ -1,0 +1,13 @@
+{
+  "domain": "whirlpool_cooking",
+  "name": "Whirlpool Cooking",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/your-user/ha-whirlpool-cooking",
+  "integration_type": "device",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/your-user/ha-whirlpool-cooking/issues",
+  "loggers": ["whirlpool"],
+  "requirements": ["whirlpool-sixth-sense>=0.18.0"],
+  "version": "0.1.0"
+}

@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Whirlpool Cooking",
+        "description": "Connect ovens, ranges, and microwaves registered in a Whirlpool-family app.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "region": "Region",
+          "brand": "Brand"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Whirlpool.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "state": { "name": "State" },
+      "mode": { "name": "Mode" },
+      "target_temperature": { "name": "Target temperature" },
+      "time_remaining": { "name": "Time remaining" }
+    },
+    "binary_sensor": {
+      "door": { "name": "Door" },
+      "online": { "name": "Online" }
+    },
+    "button": {
+      "refresh": { "name": "Refresh" }
+    }
+  }
+}
