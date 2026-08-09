@@ -3,15 +3,15 @@ name = "ha-whirlpool-cooking"
 version = "0.1.0"
 description = "Home Assistant custom integration for Whirlpool-family cooking appliances"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.2"
 license = "MIT"
 classifiers = [
-  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Home Automation",
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "N", "UP"]
