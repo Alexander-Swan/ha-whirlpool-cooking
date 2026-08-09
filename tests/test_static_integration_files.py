@@ -13,7 +13,15 @@ def test_temperature_unit_uses_home_assistant_constant() -> None:
     sensor_source = (INTEGRATION_PATH / "sensor.py").read_text()
 
     assert "UnitOfTemperature.FAHRENHEIT" in sensor_source
+    assert "SensorDeviceClass.TEMPERATURE" in sensor_source
     assert "\u00c2\u00b0F" not in sensor_source
+
+
+def test_refresh_button_is_diagnostic() -> None:
+    """The refresh button should be grouped with diagnostic entities."""
+    button_source = (INTEGRATION_PATH / "button.py").read_text()
+
+    assert "EntityCategory.DIAGNOSTIC" in button_source
 
 
 def test_no_unregistered_services_file() -> None:

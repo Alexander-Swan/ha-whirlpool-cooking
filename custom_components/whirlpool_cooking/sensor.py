@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -36,6 +40,7 @@ SENSORS: tuple[WhirlpoolSensorDescription, ...] = (
     WhirlpoolSensorDescription(
         key="target_temperature",
         translation_key="target_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         value_fn=lambda appliance: _value(
             appliance,
