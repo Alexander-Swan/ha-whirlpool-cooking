@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from inspect import isawaitable
 import logging
 from typing import Any
 
@@ -93,8 +94,19 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
 
     async def async_shutdown(self) -> None:
         """Disconnect push resources if the library created them."""
-        if self._manager is not None and hasattr(self._manager, "disconnect"):
-            await self._manager.disconnect()
+        if self._manager is not None:
+            await async_disconnect_manager(self._manager)
+
+
+async def async_disconnect_manager(manager: Any) -> None:
+    """Disconnect manager resources when supported by the library."""
+    disconnect = getattr(manager, "disconnect", None)
+    if disconnect is None:
+        return
+
+    result = disconnect()
+    if isawaitable(result):
+        await result
 
 
 def _log_unsupported_models(manager: Any) -> None:
