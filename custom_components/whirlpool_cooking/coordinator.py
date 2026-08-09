@@ -20,6 +20,10 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(minutes=1)
 
+COOKING_DATA_MODELS = {
+    "ddm_cooking_mhc76_v1",
+}
+
 
 def _enum_member(enum_type: Any, value: str) -> Any:
     """Return a Whirlpool enum member by common value spellings."""
@@ -50,7 +54,9 @@ async def build_appliance_manager(
         session,
     )
     await auth.do_auth(store=False)
-    return AppliancesManager(backend_selector, auth, session)
+    manager = AppliancesManager(backend_selector, auth, session)
+    _add_cooking_model_compat(manager)
+    return manager
 
 
 class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
@@ -101,6 +107,9 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
 
 async def async_disconnect_manager(manager: Any) -> None:
     """Disconnect manager resources when supported by the library."""
+    if _disconnect_is_noop(manager):
+        return
+
     disconnect = getattr(manager, "disconnect", None)
     if disconnect is None:
         return
@@ -108,6 +117,58 @@ async def async_disconnect_manager(manager: Any) -> None:
     result = disconnect()
     if isawaitable(result):
         await result
+
+
+def _add_cooking_model_compat(manager: Any) -> None:
+    """Teach older whirlpool-sixth-sense releases about known cooking models."""
+    add_appliance = getattr(manager, "_add_appliance", None)
+    if add_appliance is None:
+        return
+
+    def add_appliance_with_cooking_models(appliance: dict[str, Any]) -> None:
+        data_model = str(appliance.get("DATA_MODEL_KEY", "")).lower()
+        if data_model in COOKING_DATA_MODELS:
+            _add_oven_appliance(manager, appliance)
+            return
+
+        add_appliance(appliance)
+
+    manager._add_appliance = add_appliance_with_cooking_models
+
+
+def _add_oven_appliance(manager: Any, appliance: dict[str, Any]) -> None:
+    """Register an appliance as an oven using the upstream library types."""
+    from whirlpool.oven import Oven
+    from whirlpool.types import ApplianceInfo
+
+    data_model = appliance["DATA_MODEL_KEY"]
+    appliance_data = ApplianceInfo(
+        said=appliance["SAID"],
+        name=appliance["APPLIANCE_NAME"],
+        data_model=data_model,
+        category=appliance["CATEGORY_NAME"],
+        model_number=appliance.get("MODEL_NO", ""),
+        serial_number=appliance.get("SERIAL", ""),
+    )
+    manager._ovens[appliance_data.said] = Oven(
+        manager._backend_selector,
+        manager._auth,
+        manager._session,
+        appliance_data,
+    )
+    manager.__dict__.pop("all_appliances", None)
+    _LOGGER.debug("Registered Whirlpool cooking appliance model %s", data_model)
+
+
+def _disconnect_is_noop(manager: Any) -> bool:
+    """Return true when the upstream manager has no push resources to close."""
+    state = getattr(manager, "__dict__", {})
+    has_push_state = "_event_socket" in state or "_keepalive_task" in state
+    return (
+        has_push_state
+        and state.get("_event_socket") is None
+        and state.get("_keepalive_task") is None
+    )
 
 
 def _log_unsupported_models(manager: Any) -> None:
