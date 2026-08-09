@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -35,7 +36,7 @@ SENSORS: tuple[WhirlpoolSensorDescription, ...] = (
     WhirlpoolSensorDescription(
         key="target_temperature",
         translation_key="target_temperature",
-        native_unit_of_measurement="°F",
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         value_fn=lambda appliance: _value(
             appliance,
             "target_temperature",
