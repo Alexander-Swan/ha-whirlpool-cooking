@@ -102,3 +102,30 @@ async def test_disconnect_manager_handles_sync_and_async_disconnects() -> None:
     sync_manager = SyncManager()
     await async_disconnect_manager(sync_manager)
     assert sync_manager.disconnected is True
+
+
+async def test_coordinator_shutdown_disconnects_manager(hass) -> None:
+    """Test coordinator shutdown cleans up the active manager."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import DOMAIN
+    from custom_components.whirlpool_cooking.coordinator import (
+        WhirlpoolCookingCoordinator,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "cook@example.com",
+            "password": "secret",
+            "region": "US",
+            "brand": "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+    coordinator = WhirlpoolCookingCoordinator(hass, entry)
+    coordinator._manager = AsyncMock()
+
+    await coordinator.async_shutdown()
+
+    coordinator._manager.disconnect.assert_awaited_once()

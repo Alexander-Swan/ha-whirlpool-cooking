@@ -143,3 +143,37 @@ async def test_config_flow_unexpected_error_returns_unknown(hass) -> None:
 
     assert result["type"] is data_entry_flow.FlowResultType.FORM
     assert result["errors"] == {"base": "unknown"}
+
+
+async def test_config_flow_duplicate_account_aborts(hass) -> None:
+    """Test duplicate account setup is rejected."""
+    from homeassistant import data_entry_flow
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import (
+        CONF_BRAND,
+        CONF_REGION,
+        DOMAIN,
+    )
+
+    user_input = {
+        "username": "cook@example.com",
+        "password": "secret",
+        CONF_REGION: "US",
+        CONF_BRAND: "whirlpool",
+    }
+    unique_id = "whirlpool_US_cook@example.com"
+    MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=unique_id,
+        data=user_input,
+    ).add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "user"},
+        data=user_input,
+    )
+
+    assert result["type"] is data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
