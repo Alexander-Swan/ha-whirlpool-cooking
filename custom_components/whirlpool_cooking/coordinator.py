@@ -82,6 +82,8 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
             if not await self._manager.fetch_appliances():
                 raise UpdateFailed("Unable to fetch Whirlpool appliances")
 
+            await self._manager.fetch_all_data()
+
             appliances = [
                 *getattr(self._manager, "ovens", []),
                 *getattr(self._manager, "microwaves", []),

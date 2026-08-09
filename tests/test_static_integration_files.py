@@ -11,7 +11,7 @@ def test_temperature_unit_uses_home_assistant_constant() -> None:
     """Guard against mojibake in the temperature unit."""
     sensor_source = (INTEGRATION_PATH / "sensor.py").read_text()
 
-    assert "UnitOfTemperature.FAHRENHEIT" in sensor_source
+    assert "UnitOfTemperature.CELSIUS" in sensor_source
     assert "SensorDeviceClass.TEMPERATURE" in sensor_source
     assert "\u00c2\u00b0F" not in sensor_source
 

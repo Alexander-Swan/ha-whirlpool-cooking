@@ -23,13 +23,20 @@
   },
   "entity": {
     "sensor": {
-      "state": { "name": "State" },
-      "mode": { "name": "Mode" },
-      "target_temperature": { "name": "Target temperature" },
-      "time_remaining": { "name": "Time remaining" }
+      "upper_state": { "name": "Upper state" },
+      "upper_mode": { "name": "Upper mode" },
+      "upper_temperature": { "name": "Upper temperature" },
+      "upper_target_temperature": { "name": "Upper target temperature" },
+      "upper_cook_time": { "name": "Upper cook time" },
+      "lower_state": { "name": "Lower state" },
+      "lower_mode": { "name": "Lower mode" },
+      "lower_temperature": { "name": "Lower temperature" },
+      "lower_target_temperature": { "name": "Lower target temperature" },
+      "lower_cook_time": { "name": "Lower cook time" }
     },
     "binary_sensor": {
-      "door": { "name": "Door" },
+      "upper_door": { "name": "Upper door" },
+      "lower_door": { "name": "Lower door" },
       "online": { "name": "Online" }
     },
     "button": {

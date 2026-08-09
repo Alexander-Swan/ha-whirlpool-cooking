@@ -49,6 +49,7 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
 
     assert data == [oven, microwave]
     manager.fetch_appliances.assert_awaited_once()
+    manager.fetch_all_data.assert_awaited_once()
 
 
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
