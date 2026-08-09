@@ -144,6 +144,38 @@ async def test_config_flow_unexpected_error_returns_unknown(hass) -> None:
     assert result["errors"] == {"base": "unknown"}
 
 
+async def test_config_flow_account_locked_returns_account_locked(hass) -> None:
+    """Test locked Whirlpool accounts get a specific form error."""
+    from homeassistant import data_entry_flow
+
+    from custom_components.whirlpool_cooking.const import (
+        CONF_BRAND,
+        CONF_REGION,
+        DOMAIN,
+    )
+
+    class AccountLockedError(Exception):
+        """Fake Whirlpool locked-account error."""
+
+    with patch(
+        "custom_components.whirlpool_cooking.config_flow.build_appliance_manager",
+        side_effect=AccountLockedError,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": "user"},
+            data={
+                "username": "cook@example.com",
+                "password": "secret",
+                CONF_REGION: "US",
+                CONF_BRAND: "whirlpool",
+            },
+        )
+
+    assert result["type"] is data_entry_flow.FlowResultType.FORM
+    assert result["errors"] == {"base": "account_locked"}
+
+
 async def test_config_flow_duplicate_account_aborts(hass) -> None:
     """Test duplicate account setup is rejected."""
     from homeassistant import data_entry_flow

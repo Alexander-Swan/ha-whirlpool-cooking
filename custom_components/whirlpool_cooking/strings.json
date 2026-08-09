@@ -13,6 +13,7 @@
       }
     },
     "error": {
+      "account_locked": "This Whirlpool account is locked. Unlock it in the official Whirlpool-family app or website, then try again.",
       "cannot_connect": "Unable to connect to Whirlpool.",
       "unknown": "Unexpected error."
     },

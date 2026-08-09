@@ -16,6 +16,8 @@ from .coordinator import async_disconnect_manager, build_appliance_manager
 
 _LOGGER = logging.getLogger(__name__)
 
+ERR_ACCOUNT_LOCKED = "account_locked"
+
 
 class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Whirlpool Cooking config flow."""
@@ -58,9 +60,19 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     err,
                 )
                 errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected Whirlpool Cooking setup failure")
-                errors["base"] = "unknown"
+            except Exception as err:
+                if type(err).__name__ == "AccountLockedError":
+                    _LOGGER.warning(
+                        "Whirlpool account is locked for brand=%s region=%s "
+                        "username=%s",
+                        user_input[CONF_BRAND],
+                        user_input[CONF_REGION],
+                        user_input[CONF_USERNAME],
+                    )
+                    errors["base"] = ERR_ACCOUNT_LOCKED
+                else:
+                    _LOGGER.exception("Unexpected Whirlpool Cooking setup failure")
+                    errors["base"] = "unknown"
             else:
                 if not errors:
                     return self.async_create_entry(
