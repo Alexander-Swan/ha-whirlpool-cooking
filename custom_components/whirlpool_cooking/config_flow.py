@@ -40,8 +40,23 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 session = async_get_clientsession(self.hass)
                 manager = await build_appliance_manager(session, user_input)
                 if not await manager.fetch_appliances():
+                    _LOGGER.warning(
+                        "Whirlpool setup connected but could not fetch appliances "
+                        "for brand=%s region=%s username=%s",
+                        user_input[CONF_BRAND],
+                        user_input[CONF_REGION],
+                        user_input[CONF_USERNAME],
+                    )
                     errors["base"] = "cannot_connect"
-            except ClientError:
+            except ClientError as err:
+                _LOGGER.warning(
+                    "Whirlpool setup failed while connecting for brand=%s "
+                    "region=%s username=%s: %s",
+                    user_input[CONF_BRAND],
+                    user_input[CONF_REGION],
+                    user_input[CONF_USERNAME],
+                    err,
+                )
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected Whirlpool Cooking setup failure")
