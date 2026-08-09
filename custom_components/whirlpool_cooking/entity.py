@@ -62,5 +62,10 @@ def _value(source: Any, *names: str, default: Any = None) -> Any:
             return source[name]
         if hasattr(source, name):
             value = getattr(source, name)
-            return value() if callable(value) and not name.startswith("set_") else value
+            if callable(value) and not name.startswith("set_"):
+                try:
+                    return value()
+                except TypeError:
+                    return default
+            return value
     return default

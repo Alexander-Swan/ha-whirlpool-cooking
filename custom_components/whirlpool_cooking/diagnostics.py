@@ -73,5 +73,10 @@ def _read(source: Any, *names: str) -> Any:
             return source[name]
         if hasattr(source, name):
             value = getattr(source, name)
-            return value() if callable(value) else value
+            if callable(value):
+                try:
+                    return value()
+                except TypeError:
+                    return None
+            return value
     return None
