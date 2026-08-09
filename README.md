@@ -37,6 +37,10 @@ devices.
 
 ## Development
 
+Home Assistant currently requires Python 3.14.2 or newer for a full development
+environment. Older local Python versions can still run the static tests, but the
+Home Assistant runtime tests will be skipped.
+
 ```powershell
 python -m pip install -r requirements_test.txt
 python -m pytest
