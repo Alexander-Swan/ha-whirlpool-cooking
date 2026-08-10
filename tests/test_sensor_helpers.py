@@ -538,6 +538,8 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     """Microwave hood attributes should create light and fan entities."""
     from custom_components.whirlpool_cooking.fan import (
         ATTR_HOOD_FAN_SPEED,
+        PRESET_MODE_TO_SPEED,
+        SPEED_TO_PRESET_MODE,
         _speed_for_percentage,
         _speed_value,
     )
@@ -579,6 +581,8 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert _level_for_brightness(255, 2) == 2
     assert ATTR_HOOD_FAN_SPEED in appliance._data_dict["attributes"]
     assert _speed_value(appliance) == 4
+    assert SPEED_TO_PRESET_MODE[4] == "Speed 4"
+    assert PRESET_MODE_TO_SPEED["Speed 4"] == "4"
     assert _speed_for_percentage(50) == "3"
     assert _speed_for_percentage(100) == "6"
 

@@ -20,6 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
 HOOD_FAN_MAX_SPEED = 6
 
+SPEED_TO_PRESET_MODE = {
+    speed: f"Speed {speed}" for speed in range(1, HOOD_FAN_MAX_SPEED + 1)
+}
+PRESET_MODE_TO_SPEED = {
+    preset_mode: str(speed)
+    for speed, preset_mode in SPEED_TO_PRESET_MODE.items()
+}
 PERCENTAGE_TO_SPEED = tuple(
     (round(speed * 100 / HOOD_FAN_MAX_SPEED), str(speed))
     for speed in range(HOOD_FAN_MAX_SPEED + 1)
@@ -67,10 +74,12 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
     """Whirlpool Cooking hood fan."""
 
     _attr_supported_features = (
-        FanEntityFeature.SET_SPEED
+        FanEntityFeature.PRESET_MODE
+        | FanEntityFeature.SET_SPEED
         | FanEntityFeature.TURN_OFF
         | FanEntityFeature.TURN_ON
     )
+    _attr_preset_modes = list(PRESET_MODE_TO_SPEED)
     _attr_speed_count = HOOD_FAN_MAX_SPEED
     _attr_translation_key = "hood_fan"
 
@@ -98,6 +107,14 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
             return 0
         return round(min(speed, HOOD_FAN_MAX_SPEED) * 100 / HOOD_FAN_MAX_SPEED)
 
+    @property
+    def preset_mode(self) -> str | None:
+        """Return current fan preset mode."""
+        speed = _speed_value(self.appliance)
+        if speed is None or speed <= 0:
+            return None
+        return SPEED_TO_PRESET_MODE.get(min(speed, HOOD_FAN_MAX_SPEED))
+
     async def async_turn_on(
         self,
         percentage: int | None = None,
@@ -105,16 +122,30 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn the fan on."""
+        if preset_mode is not None:
+            await self.async_set_preset_mode(preset_mode)
+            return
         await self.async_set_percentage(percentage or 100)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the fan off."""
         await self.async_set_percentage(0)
 
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set fan speed by Whirlpool preset mode."""
+        speed = PRESET_MODE_TO_SPEED.get(preset_mode)
+        if speed is None:
+            raise HomeAssistantError(f"Unsupported Whirlpool fan mode: {preset_mode}")
+        await self._async_set_speed(speed)
+
     async def async_set_percentage(self, percentage: int) -> None:
         """Set fan speed by percentage."""
+        await self._async_set_speed(_speed_for_percentage(percentage))
+
+    async def _async_set_speed(self, speed: str) -> None:
+        """Set raw Whirlpool fan speed and refresh appliance data."""
         if not await self.appliance.send_attributes(
-            {ATTR_HOOD_FAN_SPEED: _speed_for_percentage(percentage)},
+            {ATTR_HOOD_FAN_SPEED: speed},
         ):
             raise HomeAssistantError("Whirlpool rejected the fan command")
         await self.coordinator.async_request_refresh()
