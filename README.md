@@ -91,7 +91,7 @@ Microwave entities are created from the raw attributes reported by the appliance
 | `sensor` | Target temperature | Target/set temperature when present. |
 | `light` | Microwave light | On/off microwave cavity light when `Mwo_DisplaySetLightOn` is present. |
 | `light` | Hood light | Brightness-capable hood surface light when `Hood_OperationSetSurfaceLight` is present. The raw Whirlpool levels are mapped to Home Assistant brightness. |
-| `fan` | Hood fan | Multi-speed hood exhaust fan when `Hood_OperationSetExhaustFanSpeed` is present. The raw Whirlpool speeds are exposed as `Speed 1` through `Speed 6` preset modes and mapped to Home Assistant fan percentage. |
+| `fan` | Hood fan | Multi-speed hood exhaust fan when `Hood_OperationSetExhaustFanSpeed` is present. The raw Whirlpool speeds are exposed as `Low`, `Medium`, `Medium-high`, and `High` preset modes, plus `Off` in the hood fan mode select. |
 
 ### Additional Sensors
 
@@ -138,7 +138,7 @@ are currently passed in Celsius.
 
 Hood light and hood fan controls use normal Home Assistant `light` and `fan`
 services. The hood light supports two Whirlpool brightness levels, and the hood
-fan supports six Whirlpool speed levels as both preset modes and percentage.
+fan supports `Off`, `Low`, `Medium`, `Medium-high`, and `High` controls.
 
 ## Options
 

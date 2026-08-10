@@ -18,10 +18,13 @@ from .sensor import _has_attribute, _raw_attribute_value
 _LOGGER = logging.getLogger(__name__)
 
 ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
-HOOD_FAN_MAX_SPEED = 6
+HOOD_FAN_MAX_SPEED = 4
 
 SPEED_TO_PRESET_MODE = {
-    speed: f"Speed {speed}" for speed in range(1, HOOD_FAN_MAX_SPEED + 1)
+    1: "Low",
+    2: "Medium",
+    3: "Medium-high",
+    4: "High",
 }
 PRESET_MODE_TO_SPEED = {
     preset_mode: str(speed)

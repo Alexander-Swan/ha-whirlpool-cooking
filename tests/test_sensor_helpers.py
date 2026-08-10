@@ -585,14 +585,12 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     ]
     assert select_descriptions[0].options == [
         "Off",
-        "Speed 1",
-        "Speed 2",
-        "Speed 3",
-        "Speed 4",
-        "Speed 5",
-        "Speed 6",
+        "Low",
+        "Medium",
+        "Medium-high",
+        "High",
     ]
-    assert select_descriptions[0].current_fn(appliance) == "Speed 4"
+    assert select_descriptions[0].current_fn(appliance) == "High"
     assert light_descriptions[1].value_fn(appliance) is True
     assert light_descriptions[1].brightness_fn(appliance) == 255
     assert _brightness_for_level(1, 2) == 128
@@ -600,12 +598,12 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert _level_for_brightness(255, 2) == 2
     assert ATTR_HOOD_FAN_SPEED in appliance._data_dict["attributes"]
     assert _speed_value(appliance) == 4
-    assert SPEED_TO_PRESET_MODE[4] == "Speed 4"
-    assert PRESET_MODE_TO_SPEED["Speed 4"] == "4"
-    assert _speed_for_percentage(50) == "3"
-    assert _speed_for_percentage(100) == "6"
+    assert SPEED_TO_PRESET_MODE[4] == "High"
+    assert PRESET_MODE_TO_SPEED["Medium-high"] == "3"
+    assert _speed_for_percentage(50) == "2"
+    assert _speed_for_percentage(100) == "4"
 
-    asyncio.run(select_descriptions[0].select_fn(appliance, "Speed 2"))
+    asyncio.run(select_descriptions[0].select_fn(appliance, "Medium"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "2"}
     asyncio.run(select_descriptions[0].select_fn(appliance, "Off"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "0"}
