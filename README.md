@@ -201,5 +201,11 @@ Home Assistant runtime tests will be skipped.
 
 ```powershell
 python -m pip install -r requirements_test.txt
-python -m pytest
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
+python -m pytest tests/test_sensor_helpers.py tests/test_entity_helpers.py tests/test_manifest.py tests/test_static_integration_files.py
 ```
+
+The full Home Assistant pytest plugin suite is exercised by GitHub Actions on
+Linux. On Windows, the Home Assistant test plugin currently imports HA's
+POSIX-only runner path before collection, so local smoke tests should use the
+plugin-disabled command above.
