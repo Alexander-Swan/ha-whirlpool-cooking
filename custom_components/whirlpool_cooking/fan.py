@@ -41,7 +41,11 @@ async def async_setup_entry(
 class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
     """Whirlpool Cooking hood fan."""
 
-    _attr_supported_features = FanEntityFeature.SET_SPEED
+    _attr_supported_features = (
+        FanEntityFeature.SET_SPEED
+        | FanEntityFeature.TURN_OFF
+        | FanEntityFeature.TURN_ON
+    )
     _attr_translation_key = "hood_fan"
 
     def __init__(
