@@ -17,6 +17,8 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .cavity import cavity_device_key, cavity_device_name, has_attribute
+from .cavity import cavity_exists as _cavity_exists
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 
@@ -140,22 +142,6 @@ def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescripti
     return descriptions
 
 
-def _cavity_exists(appliance: Any, cavity: Any) -> bool:
-    """Return true when the Whirlpool API reports that an oven cavity exists."""
-    from whirlpool.oven import ATTR_POSTFIX_STATUS_STATE, CAVITY_PREFIX_MAP
-
-    if not _has_attribute(
-        appliance,
-        f"{CAVITY_PREFIX_MAP[cavity]}_{ATTR_POSTFIX_STATUS_STATE}",
-    ):
-        return False
-
-    exists = getattr(appliance, "get_oven_cavity_exists", None)
-    if exists is None:
-        return False
-    return bool(exists(cavity))
-
-
 def _sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
     """Build all sensor descriptions for an appliance."""
     descriptions = [*SENSORS, *_cavity_sensor_descriptions(appliance)]
@@ -203,6 +189,11 @@ def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
     return value
 
 
+def _has_attribute(appliance: Any, attribute: str) -> bool:
+    """Return true if an appliance reports a raw Whirlpool attribute."""
+    return has_attribute(appliance, attribute)
+
+
 def _should_expose_raw_attribute(attribute: str) -> bool:
     """Return true for raw attributes that identify microwave-like payloads."""
     tokens = _attribute_tokens(attribute)
@@ -243,14 +234,6 @@ def _find_raw_attribute(
     return None
 
 
-def _has_attribute(appliance: Any, attribute: str) -> bool:
-    """Return true if an appliance reports a raw Whirlpool attribute."""
-    has_attribute = getattr(appliance, "has_attribute", None)
-    if has_attribute is None:
-        return False
-    return bool(has_attribute(attribute))
-
-
 def _attribute_tokens(attribute: str) -> set[str]:
     """Split Whirlpool's raw camel-case attribute names into tokens."""
     spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", attribute.replace("_", " "))
@@ -283,7 +266,13 @@ class WhirlpoolCookingSensor(WhirlpoolCookingEntity, SensorEntity):
         description: WhirlpoolSensorDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, appliance, description.key)
+        super().__init__(
+            coordinator,
+            appliance,
+            description.key,
+            device_key=cavity_device_key(appliance, description.cavity),
+            device_name=cavity_device_name(appliance, description.cavity),
+        )
         self.entity_description = description
 
     @property

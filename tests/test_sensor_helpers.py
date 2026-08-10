@@ -109,6 +109,9 @@ def test_oven_cavities_get_light_entities(monkeypatch) -> None:
         def has_attribute(self, attribute: str) -> bool:
             return attribute in self._data_dict["attributes"]
 
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
         def get_oven_cavity_exists(self, cavity) -> bool:
             return True
 
@@ -124,10 +127,89 @@ def test_oven_cavities_get_light_entities(monkeypatch) -> None:
     assert descriptions[0].value_fn(Appliance()) is True
 
 
+def test_multi_cavity_oven_gets_cavity_device_keys(monkeypatch) -> None:
+    """Two-cavity ovens should expose cavity entities on child devices."""
+    from custom_components.whirlpool_cooking.cavity import (
+        cavity_device_key,
+        cavity_device_name,
+    )
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenLowerCavity_OpStatusState": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return True
+
+    appliance = Appliance()
+
+    assert cavity_device_key(appliance, Cavity.Upper) == "upper"
+    assert cavity_device_name(appliance, Cavity.Lower) == "Lower"
+
+
+def test_single_cavity_oven_stays_on_base_device(monkeypatch) -> None:
+    """Single-cavity ovens should not create a separate cavity device."""
+    from custom_components.whirlpool_cooking.cavity import cavity_device_key
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return cavity is Cavity.Upper
+
+    assert cavity_device_key(Appliance(), Cavity.Upper) is None
+
+
 def test_microwave_gets_hood_light_and_fan_entities() -> None:
     """Microwave hood attributes should create light and fan entities."""
-    from custom_components.whirlpool_cooking.fan import ATTR_HOOD_FAN_SPEED
-    from custom_components.whirlpool_cooking.fan import _speed_value
+    from custom_components.whirlpool_cooking.fan import (
+        ATTR_HOOD_FAN_SPEED,
+        _speed_value,
+    )
     from custom_components.whirlpool_cooking.light import _light_descriptions
 
     class Appliance:

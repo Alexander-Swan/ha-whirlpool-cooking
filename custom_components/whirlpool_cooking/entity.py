@@ -21,11 +21,16 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
         coordinator: WhirlpoolCookingCoordinator,
         appliance: Any,
         key: str,
+        *,
+        device_key: str | None = None,
+        device_name: str | None = None,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
         self._appliance = appliance
         self._said = str(_value(appliance, "said", "SAID", default="unknown"))
+        self._device_key = device_key
+        self._device_name = device_name
         self.entity_key = key
         self._attr_unique_id = f"{self.said}_{key}"
 
@@ -47,6 +52,14 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
         """Return device info."""
         name = _value(self.appliance, "name", "appliance_name", default=self.said)
         model = _value(self.appliance, "model", "model_number", default=None)
+        if self._device_key is not None:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{self.said}_{self._device_key}")},
+                manufacturer="Whirlpool",
+                name=f"{name} {self._device_name or self._device_key}",
+                model=str(model) if model else None,
+                via_device=(DOMAIN, self.said),
+            )
         return DeviceInfo(
             identifiers={(DOMAIN, self.said)},
             manufacturer="Whirlpool",

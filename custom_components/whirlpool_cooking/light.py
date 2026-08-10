@@ -6,13 +6,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.light import LightEntity
-from homeassistant.components.light import LightEntityDescription
+from homeassistant.components.light import LightEntity, LightEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .cavity import cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
@@ -27,6 +27,7 @@ class WhirlpoolLightDescription(LightEntityDescription):
 
     value_fn: Callable[[Any], bool | None]
     set_fn: Callable[[Any, bool], Awaitable[bool]]
+    cavity: Any | None = None
 
 
 async def async_setup_entry(
@@ -69,6 +70,7 @@ def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription
             WhirlpoolLightDescription(
                 key=f"{cavity_key}_light",
                 translation_key=f"{cavity_key}_light",
+                cavity=cavity,
                 value_fn=lambda item, attr=attribute: _raw_bool(item, attr),
                 set_fn=lambda item, on, oven_cavity=cavity: item.set_light(
                     on,
@@ -126,7 +128,13 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
         description: WhirlpoolLightDescription,
     ) -> None:
         """Initialize the light."""
-        super().__init__(coordinator, appliance, description.key)
+        super().__init__(
+            coordinator,
+            appliance,
+            description.key,
+            device_key=cavity_device_key(appliance, description.cavity),
+            device_name=cavity_device_name(appliance, description.cavity),
+        )
         self.entity_description = description
 
     @property

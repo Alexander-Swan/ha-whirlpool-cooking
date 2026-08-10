@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .cavity import cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, _value
 from .sensor import _cavity_exists
@@ -93,7 +94,13 @@ class WhirlpoolCookingBinarySensor(WhirlpoolCookingEntity, BinarySensorEntity):
         description: WhirlpoolBinarySensorDescription,
     ) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator, appliance, description.key)
+        super().__init__(
+            coordinator,
+            appliance,
+            description.key,
+            device_key=cavity_device_key(appliance, description.cavity),
+            device_name=cavity_device_name(appliance, description.cavity),
+        )
         self.entity_description = description
 
     @property

@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .cavity import cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists
@@ -23,6 +24,7 @@ class WhirlpoolButtonDescription(ButtonEntityDescription):
     """Describe a Whirlpool button."""
 
     press_fn: Callable[[Any, WhirlpoolCookingCoordinator], Awaitable[bool | None]]
+    cavity: Any | None = None
 
 
 BUTTONS: tuple[WhirlpoolButtonDescription, ...] = (
@@ -68,6 +70,7 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
             WhirlpoolButtonDescription(
                 key=f"{cavity_key}_stop_cook",
                 translation_key=f"{cavity_key}_stop_cook",
+                cavity=cavity,
                 press_fn=lambda item, coordinator, oven_cavity=cavity: _async_stop_cook(
                     item,
                     coordinator,
@@ -107,7 +110,13 @@ class WhirlpoolCookingButton(WhirlpoolCookingEntity, ButtonEntity):
         description: WhirlpoolButtonDescription,
     ) -> None:
         """Initialize the button."""
-        super().__init__(coordinator, appliance, description.key)
+        super().__init__(
+            coordinator,
+            appliance,
+            description.key,
+            device_key=cavity_device_key(appliance, description.cavity),
+            device_name=cavity_device_name(appliance, description.cavity),
+        )
         self.entity_description = description
 
     async def async_press(self) -> None:
