@@ -27,7 +27,7 @@ def test_non_cavity_microwave_attributes_get_stable_sensor_descriptions() -> Non
             "attributes": {
                 "CookCycleMode": {"value": "8"},
                 "CookCycleStatusState": {"value": "3"},
-                "CookCycleSetTime": {"value": "60"},
+                "CookCycleSetTime": {"value": "5999"},
                 "CookCycleTimeRemaining": {"value": "30"},
                 "WifiRssi": {"value": "-50"},
             },
@@ -48,6 +48,8 @@ def test_non_cavity_microwave_attributes_get_stable_sensor_descriptions() -> Non
         "microwave_time_remaining",
     ]
     assert descriptions[0].value_fn(Appliance()) == "3"
+    assert descriptions[2].value_fn(Appliance()) == "1:39:59"
+    assert descriptions[3].value_fn(Appliance()) == "0:30"
 
 
 def test_diagnostics_reads_nested_appliance_info() -> None:
@@ -215,9 +217,6 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     """Oven cavities should create cook mode, target temp, and start buttons."""
     from enum import Enum
 
-    from homeassistant.components.sensor import SensorDeviceClass
-    from homeassistant.const import UnitOfTime
-
     from custom_components.whirlpool_cooking.button import _button_descriptions
     from custom_components.whirlpool_cooking.cooking import cook_mode_attribute_value
     from custom_components.whirlpool_cooking.number import _number_descriptions
@@ -309,9 +308,9 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     ]
     cook_time_description = _sensor_descriptions(appliance)[4]
     assert cook_time_description.key == "upper_cook_time"
-    assert cook_time_description.device_class == SensorDeviceClass.DURATION
-    assert cook_time_description.native_unit_of_measurement == UnitOfTime.SECONDS
-    assert cook_time_description.value_fn(appliance) == 3600
+    assert cook_time_description.device_class is None
+    assert cook_time_description.native_unit_of_measurement is None
+    assert cook_time_description.value_fn(appliance) == "1:00:00"
     assert _select_descriptions(appliance)[0].options == [
         "Bake",
         "Broil",

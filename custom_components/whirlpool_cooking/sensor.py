@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -133,8 +133,6 @@ def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescripti
                     key=f"{cavity_key}_cook_time",
                     translation_key=f"{cavity_key}_cook_time",
                     cavity=cavity,
-                    device_class=SensorDeviceClass.DURATION,
-                    native_unit_of_measurement=UnitOfTime.SECONDS,
                     value_fn=lambda item, oven_cavity=cavity: _oven_cook_time(
                         item,
                         oven_cavity,
@@ -170,17 +168,10 @@ def _microwave_sensor_descriptions(
             WhirlpoolSensorDescription(
                 key=f"microwave_{key}",
                 translation_key=f"microwave_{key}",
-                device_class=(
-                    SensorDeviceClass.DURATION
-                    if key in {"cook_time", "time_remaining"}
-                    else None
+                value_fn=_microwave_value_fn(
+                    attribute,
+                    key in {"cook_time", "time_remaining"},
                 ),
-                native_unit_of_measurement=(
-                    UnitOfTime.SECONDS
-                    if key in {"cook_time", "time_remaining"}
-                    else None
-                ),
-                value_fn=lambda item, attr=attribute: _raw_attribute_value(item, attr),
             ),
         )
     return descriptions
@@ -202,15 +193,34 @@ def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
     return value
 
 
-def _oven_cook_time(appliance: Any, cavity: Any) -> int | None:
+def _microwave_value_fn(
+    attribute: str,
+    is_duration: bool,
+) -> Callable[[Any], Any]:
+    """Return a value function for a raw microwave attribute."""
+
+    def value_fn(appliance: Any) -> Any:
+        if is_duration:
+            return _formatted_raw_duration_attribute(appliance, attribute)
+        return _raw_attribute_value(appliance, attribute)
+
+    return value_fn
+
+
+def _oven_cook_time(appliance: Any, cavity: Any) -> str | None:
     """Return configured oven cook time, falling back to elapsed time."""
     configured = _raw_int_attribute(
         appliance,
         cavity_attribute(cavity, "TimeSetCookTimeSet"),
     )
     if configured is not None:
-        return configured
-    return appliance.get_cook_time(cavity)
+        return _format_duration_seconds(configured)
+    return _format_duration_seconds(appliance.get_cook_time(cavity))
+
+
+def _formatted_raw_duration_attribute(appliance: Any, attribute: str) -> str | None:
+    """Return a raw Whirlpool duration attribute as a formatted time string."""
+    return _format_duration_seconds(_raw_int_attribute(appliance, attribute))
 
 
 def _raw_int_attribute(appliance: Any, attribute: str) -> int | None:
@@ -222,6 +232,24 @@ def _raw_int_attribute(appliance: Any, attribute: str) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _format_duration_seconds(value: Any) -> str | None:
+    """Return seconds formatted as H:MM:SS or M:SS."""
+    if value is None:
+        return None
+    try:
+        total_seconds = int(value)
+    except (TypeError, ValueError):
+        return None
+    if total_seconds < 0:
+        return None
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
 
 
 def _has_attribute(appliance: Any, attribute: str) -> bool:
