@@ -92,6 +92,9 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
     def _register_attr_callback(self) -> None:
         """Register this entity for Whirlpool appliance attribute updates."""
         appliance = self.appliance
+        if self._registered_appliance is appliance:
+            return
+        self._unregister_attr_callback()
         register = getattr(appliance, "register_attr_callback", None)
         if not callable(register):
             return
@@ -116,6 +119,13 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
         """Handle a pushed Whirlpool appliance attribute update."""
         self._attr_available = self._appliance_available(self.appliance)
         self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle polled updates and rebind callbacks to fresh appliances."""
+        self._register_attr_callback()
+        self._attr_available = self._appliance_available(self.appliance)
+        super()._handle_coordinator_update()
 
     @staticmethod
     def _appliance_available(appliance: Any) -> bool:
