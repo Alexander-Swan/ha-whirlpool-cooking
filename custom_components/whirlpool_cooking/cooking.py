@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import re
+from collections.abc import Iterable
 from typing import Any
 
 COOK_MODE_OPTIONS = (
@@ -15,6 +18,12 @@ COOK_MODE_OPTIONS = (
 )
 
 PENDING_COOK_CONTROLS = "_whirlpool_cooking_pending_controls"
+
+_COOK_MODE_KEY_PATTERN = re.compile(
+    r"(?:cook[\w\s-]*mode|common[\w\s-]*mode|cycle[\w\s-]*mode|mode(?:id)?)"
+    r'["\']?\s*[:=]\s*["\']?(\d+)',
+    re.IGNORECASE,
+)
 
 
 def cook_mode_option(mode: Any) -> str | None:
@@ -40,6 +49,25 @@ def cook_mode_attribute_value(option: str) -> str:
     from whirlpool.oven import COOK_MODE_MAP
 
     return COOK_MODE_MAP[cook_mode_from_option(option)]
+
+
+def supported_cook_mode_options(appliance: Any, cavity: Any) -> list[str]:
+    """Return cook mode options supported by a specific oven cavity."""
+    supported_modes = _supported_modes_from_methods(appliance, cavity)
+    supported_modes.extend(_supported_modes_from_capabilities(appliance, cavity))
+
+    options: list[str] = []
+    for mode in supported_modes:
+        option = cook_mode_option(mode)
+        if option is not None and option not in options:
+            options.append(option)
+
+    options = [option for option in COOK_MODE_OPTIONS if option in options]
+    current_option = cook_mode_option(appliance.get_cook_mode(cavity))
+    if current_option is not None and current_option not in options:
+        options.append(current_option)
+
+    return options or list(COOK_MODE_OPTIONS)
 
 
 def get_pending_cook_mode_option(appliance: Any, cavity: Any) -> str | None:
@@ -87,6 +115,60 @@ def enum_label(value: Any) -> str | None:
     return _camel_to_label(str(getattr(value, "name", value)))
 
 
+def _supported_modes_from_methods(appliance: Any, cavity: Any) -> list[Any]:
+    """Read supported cook modes from library methods when available."""
+    supported_modes: list[Any] = []
+    for name in (
+        "get_supported_cook_modes",
+        "get_supported_cavity_cook_modes",
+        "supported_cook_modes",
+    ):
+        method = getattr(appliance, name, None)
+        if not callable(method):
+            continue
+        for args in ((cavity,), ()):
+            try:
+                value = method(*args)
+            except TypeError:
+                continue
+            supported_modes.extend(_flatten(value))
+            break
+    return supported_modes
+
+
+def _supported_modes_from_capabilities(appliance: Any, cavity: Any) -> list[Any]:
+    """Read supported cook modes from Whirlpool capability attributes."""
+    from whirlpool.oven import COOK_MODE_MAP
+
+    raw_modes: set[str] = set()
+    cavity_name = str(getattr(cavity, "name", cavity)).lower()
+    attributes = getattr(appliance, "_data_dict", {}).get("attributes", {})
+    if not isinstance(attributes, dict):
+        return []
+
+    for name, details in attributes.items():
+        attr_name = str(name)
+        if "CapabilityMode" not in attr_name and not attr_name.endswith(
+            "__RecipeSetFacadeMode",
+        ):
+            continue
+        raw_value = _attribute_value(details)
+        if raw_value is None:
+            continue
+        if attr_name.endswith("__RecipeSetFacadeMode") and cavity_name not in (
+            attr_name.lower()
+        ):
+            continue
+        raw_modes.update(_mode_values_from_payload(raw_value))
+
+    mode_by_value = {str(value): mode for mode, value in COOK_MODE_MAP.items()}
+    return [
+        mode_by_value[raw_mode]
+        for raw_mode in raw_modes
+        if raw_mode in mode_by_value
+    ]
+
+
 def _camel_to_label(value: str) -> str:
     """Convert Whirlpool enum names to display labels."""
     chars: list[str] = []
@@ -95,6 +177,64 @@ def _camel_to_label(value: str) -> str:
             chars.append(" ")
         chars.append(char)
     return "".join(chars)
+
+
+def _attribute_value(details: Any) -> Any:
+    """Return a raw Whirlpool attribute value from an attribute payload."""
+    if isinstance(details, dict) and "value" in details:
+        return details["value"]
+    return details
+
+
+def _mode_values_from_payload(value: Any) -> set[str]:
+    """Extract raw cook mode ids from structured capability payloads."""
+    modes: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_name = str(key).replace("_", "").replace("-", "").lower()
+            if key_name in {
+                "mode",
+                "modeid",
+                "cookmode",
+                "cookmodeid",
+                "commonmode",
+                "cyclemode",
+                "cyclesetcommonmode",
+            }:
+                modes.add(str(item))
+                continue
+            modes.update(_mode_values_from_payload(item))
+        return modes
+    if isinstance(value, list | tuple | set):
+        for item in value:
+            modes.update(_mode_values_from_payload(item))
+        return modes
+
+    text = str(value)
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = None
+    if parsed is not None and parsed is not value:
+        return _mode_values_from_payload(parsed)
+
+    return set(_COOK_MODE_KEY_PATTERN.findall(text))
+
+
+def _flatten(value: Any) -> Iterable[Any]:
+    """Flatten nested containers without splitting strings."""
+    if value is None:
+        return ()
+    if isinstance(value, dict):
+        return _flatten(value.values())
+    if isinstance(value, str | bytes):
+        return (value,)
+    if isinstance(value, Iterable):
+        flattened: list[Any] = []
+        for item in value:
+            flattened.extend(_flatten(item))
+        return flattened
+    return (value,)
 
 
 def _normalize_option(value: str) -> str:

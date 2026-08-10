@@ -14,11 +14,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
 from .cooking import (
-    COOK_MODE_OPTIONS,
     cavity_attribute,
     cook_mode_attribute_value,
     cook_mode_option,
     set_pending_cook_mode_option,
+    supported_cook_mode_options,
 )
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
@@ -72,7 +72,7 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
                 key=f"{cavity_key}_cook_mode_control",
                 translation_key=f"{cavity_key}_cook_mode_control",
                 cavity=cavity,
-                options=list(COOK_MODE_OPTIONS),
+                options=supported_cook_mode_options(appliance, cavity),
                 current_fn=lambda item, oven_cavity=cavity: cook_mode_option(
                     item.get_cook_mode(oven_cavity),
                 ),

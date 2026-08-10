@@ -277,6 +277,11 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         def get_target_temp(self, cavity) -> float:
             return 175
 
+        def get_supported_cook_modes(self, cavity):
+            if cavity is Cavity.Upper:
+                return (CookMode.Bake, CookMode.Broil)
+            return (CookMode.Bake, CookMode.ConvectBake, CookMode.KeepWarm)
+
     appliance = Appliance()
 
     assert [description.key for description in _select_descriptions(appliance)] == [
@@ -288,12 +293,12 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         "lower_target_temperature_control",
     ]
     assert _select_descriptions(appliance)[0].options == [
-        "Air Fry",
         "Bake",
         "Broil",
+    ]
+    assert _select_descriptions(appliance)[1].options == [
+        "Bake",
         "Convect Bake",
-        "Convect Broil",
-        "Convect Roast",
         "Keep Warm",
     ]
     assert _select_descriptions(appliance)[0].current_fn(appliance) == "Bake"
@@ -302,6 +307,53 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     ]
     assert cook_mode_attribute_value("air_fry") == "41"
     assert cook_mode_attribute_value("Air Fry") == "41"
+
+
+def test_cook_mode_options_use_capability_payload(monkeypatch) -> None:
+    """Cook mode options should narrow from structured capability attributes."""
+    from enum import Enum
+
+    from custom_components.whirlpool_cooking.cooking import supported_cook_mode_options
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+
+    import types
+
+    class CookMode(Enum):
+        Bake = 2
+        Broil = 8
+        AirFry = 41
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.CookMode = CookMode
+    oven_module.COOK_MODE_MAP = {
+        CookMode.Bake: "2",
+        CookMode.Broil: "8",
+        CookMode.AirFry: "41",
+    }
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "Relational_CapabilityModeTemperatures": {
+                    "value": (
+                        '[{"CycleSetCommonMode": "2"}, '
+                        '{"cookModeId": 8}, {"mode": "41"}]'
+                    ),
+                },
+            },
+        }
+
+        def get_cook_mode(self, cavity):
+            return CookMode.Bake
+
+    assert supported_cook_mode_options(Appliance(), Cavity.Upper) == [
+        "Air Fry",
+        "Bake",
+        "Broil",
+    ]
 
 
 def test_microwave_gets_hood_light_and_fan_entities() -> None:
