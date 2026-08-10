@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
     ColorMode,
     LightEntity,
     LightEntityDescription,
@@ -23,6 +24,7 @@ from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
 
 ATTR_HOOD_SURFACE_LIGHT = "Hood_OperationSetSurfaceLight"
 ATTR_MICROWAVE_LIGHT = "Mwo_DisplaySetLightOn"
+HOOD_LIGHT_MAX_LEVEL = 2
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -31,6 +33,9 @@ class WhirlpoolLightDescription(LightEntityDescription):
 
     value_fn: Callable[[Any], bool | None]
     set_fn: Callable[[Any, bool], Awaitable[bool]]
+    brightness_fn: Callable[[Any], int | None] | None = None
+    set_brightness_fn: Callable[[Any, int], Awaitable[bool]] | None = None
+    max_level: int | None = None
     cavity: Any | None = None
 
 
@@ -90,18 +95,37 @@ def _microwave_light_descriptions(
 ) -> list[WhirlpoolLightDescription]:
     """Build microwave and hood light descriptions."""
     descriptions: list[WhirlpoolLightDescription] = []
-    for key, translation_key, attribute in (
-        ("microwave_light", "microwave_light", ATTR_MICROWAVE_LIGHT),
-        ("hood_light", "hood_light", ATTR_HOOD_SURFACE_LIGHT),
-    ):
-        if not _has_attribute(appliance, attribute):
-            continue
+    if _has_attribute(appliance, ATTR_MICROWAVE_LIGHT):
         descriptions.append(
             WhirlpoolLightDescription(
-                key=key,
-                translation_key=translation_key,
-                value_fn=lambda item, attr=attribute: _raw_bool(item, attr),
-                set_fn=lambda item, on, attr=attribute: _send_bool(item, attr, on),
+                key="microwave_light",
+                translation_key="microwave_light",
+                value_fn=lambda item: _raw_bool(item, ATTR_MICROWAVE_LIGHT),
+                set_fn=lambda item, on: _send_bool(item, ATTR_MICROWAVE_LIGHT, on),
+            ),
+        )
+
+    if _has_attribute(appliance, ATTR_HOOD_SURFACE_LIGHT):
+        descriptions.append(
+            WhirlpoolLightDescription(
+                key="hood_light",
+                translation_key="hood_light",
+                value_fn=lambda item: _raw_level(item, ATTR_HOOD_SURFACE_LIGHT) > 0,
+                set_fn=lambda item, on: _send_level(
+                    item,
+                    ATTR_HOOD_SURFACE_LIGHT,
+                    HOOD_LIGHT_MAX_LEVEL if on else 0,
+                ),
+                brightness_fn=lambda item: _brightness_for_level(
+                    _raw_level(item, ATTR_HOOD_SURFACE_LIGHT),
+                    HOOD_LIGHT_MAX_LEVEL,
+                ),
+                set_brightness_fn=lambda item, brightness: _send_level(
+                    item,
+                    ATTR_HOOD_SURFACE_LIGHT,
+                    _level_for_brightness(brightness, HOOD_LIGHT_MAX_LEVEL),
+                ),
+                max_level=HOOD_LIGHT_MAX_LEVEL,
             ),
         )
     return descriptions
@@ -115,16 +139,39 @@ def _raw_bool(appliance: Any, attribute: str) -> bool | None:
     return str(value) == "1"
 
 
+def _raw_level(appliance: Any, attribute: str) -> int:
+    """Return a raw Whirlpool level attribute."""
+    value = _raw_attribute_value(appliance, attribute)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _brightness_for_level(level: int, max_level: int) -> int | None:
+    """Return Home Assistant brightness for a raw Whirlpool level."""
+    if level <= 0:
+        return None
+    return round(min(level, max_level) * 255 / max_level)
+
+
+def _level_for_brightness(brightness: int, max_level: int) -> int:
+    """Return a raw Whirlpool level for Home Assistant brightness."""
+    return min(max(round(brightness * max_level / 255), 1), max_level)
+
+
 async def _send_bool(appliance: Any, attribute: str, on: bool) -> bool:
     """Send a raw Whirlpool boolean attribute."""
     return await appliance.send_attributes({attribute: "1" if on else "0"})
 
 
+async def _send_level(appliance: Any, attribute: str, level: int) -> bool:
+    """Send a raw Whirlpool level attribute."""
+    return await appliance.send_attributes({attribute: str(level)})
+
+
 class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
     """Whirlpool Cooking light."""
-
-    _attr_color_mode = ColorMode.ONOFF
-    _attr_supported_color_modes = {ColorMode.ONOFF}
 
     entity_description: WhirlpoolLightDescription
 
@@ -149,8 +196,43 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
         """Return true if the light is on."""
         return self.entity_description.value_fn(self.appliance)
 
+    @property
+    def color_mode(self) -> ColorMode | None:
+        """Return the current color mode."""
+        if not self.is_on:
+            return None
+        if self.entity_description.max_level is not None:
+            return ColorMode.BRIGHTNESS
+        return ColorMode.ONOFF
+
+    @property
+    def supported_color_modes(self) -> set[ColorMode]:
+        """Return supported color modes."""
+        if self.entity_description.max_level is not None:
+            return {ColorMode.BRIGHTNESS}
+        return {ColorMode.ONOFF}
+
+    @property
+    def brightness(self) -> int | None:
+        """Return current brightness for level-capable lights."""
+        if self.entity_description.brightness_fn is None:
+            return None
+        return self.entity_description.brightness_fn(self.appliance)
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        if (
+            brightness is not None
+            and self.entity_description.set_brightness_fn is not None
+        ):
+            if not await self.entity_description.set_brightness_fn(
+                self.appliance,
+                int(brightness),
+            ):
+                raise HomeAssistantError("Whirlpool rejected the light command")
+            await self.coordinator.async_request_refresh()
+            return
         await self._async_set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:

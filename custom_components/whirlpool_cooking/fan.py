@@ -15,12 +15,11 @@ from .entity import WhirlpoolCookingEntity
 from .sensor import _has_attribute, _raw_attribute_value
 
 ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
+HOOD_FAN_MAX_SPEED = 6
 
-PERCENTAGE_TO_SPEED = (
-    (0, "0"),
-    (33, "1"),
-    (66, "2"),
-    (100, "3"),
+PERCENTAGE_TO_SPEED = tuple(
+    (round(speed * 100 / HOOD_FAN_MAX_SPEED), str(speed))
+    for speed in range(HOOD_FAN_MAX_SPEED + 1)
 )
 
 
@@ -46,6 +45,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
         | FanEntityFeature.TURN_OFF
         | FanEntityFeature.TURN_ON
     )
+    _attr_speed_count = HOOD_FAN_MAX_SPEED
     _attr_translation_key = "hood_fan"
 
     def __init__(
@@ -70,11 +70,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
             return None
         if speed <= 0:
             return 0
-        if speed == 1:
-            return 33
-        if speed == 2:
-            return 66
-        return 100
+        return round(min(speed, HOOD_FAN_MAX_SPEED) * 100 / HOOD_FAN_MAX_SPEED)
 
     async def async_turn_on(
         self,
