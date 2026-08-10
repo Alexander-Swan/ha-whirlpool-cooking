@@ -6,7 +6,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.light import LightEntity, LightEntityDescription
+from homeassistant.components.light import (
+    ColorMode,
+    LightEntity,
+    LightEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -118,6 +122,9 @@ async def _send_bool(appliance: Any, attribute: str, on: bool) -> bool:
 
 class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
     """Whirlpool Cooking light."""
+
+    _attr_color_mode = ColorMode.ONOFF
+    _attr_supported_color_modes = {ColorMode.ONOFF}
 
     entity_description: WhirlpoolLightDescription
 
