@@ -44,6 +44,23 @@ def test_entity_value_returns_default_for_callables_requiring_args() -> None:
     assert _value(FakeAppliance(), "state", default="unknown") == "unknown"
 
 
+def test_entity_availability_uses_online_state() -> None:
+    """Test entity availability follows the appliance online state."""
+    from custom_components.whirlpool_cooking.entity import WhirlpoolCookingEntity
+
+    class Appliance:
+        def __init__(self, online) -> None:
+            self._online = online
+
+        def get_online(self):
+            return self._online
+
+    assert WhirlpoolCookingEntity._appliance_available(Appliance(True)) is True
+    assert WhirlpoolCookingEntity._appliance_available(Appliance(False)) is False
+    assert WhirlpoolCookingEntity._appliance_available(Appliance(None)) is False
+    assert WhirlpoolCookingEntity._appliance_available(Appliance("0")) is False
+
+
 def test_diagnostics_read_handles_callables_requiring_args() -> None:
     """Test diagnostics do not crash on callable library methods."""
     from custom_components.whirlpool_cooking.diagnostics import _read

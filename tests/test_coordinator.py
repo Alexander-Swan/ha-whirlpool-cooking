@@ -51,6 +51,8 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
     assert data == [oven, microwave]
     manager.fetch_appliances.assert_awaited_once()
     manager.fetch_all_data.assert_awaited_once()
+    manager.connect.assert_awaited_once()
+    assert coordinator.update_interval is None
 
 
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
@@ -83,6 +85,46 @@ async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
         coordinator = WhirlpoolCookingCoordinator(hass, entry)
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
+
+
+async def test_coordinator_falls_back_to_polling_when_push_fails(hass) -> None:
+    """Test coordinator keeps polling if push connection fails."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import DOMAIN
+    from custom_components.whirlpool_cooking.coordinator import (
+        SCAN_INTERVAL,
+        WhirlpoolCookingCoordinator,
+    )
+
+    manager = AsyncMock()
+    manager.fetch_appliances.return_value = True
+    manager.fetch_all_data.return_value = None
+    manager.connect.side_effect = RuntimeError("push failed")
+    manager.ovens = []
+    manager.microwaves = []
+    manager.appliances = []
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "cook@example.com",
+            "password": "secret",
+            "region": "US",
+            "brand": "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.whirlpool_cooking.coordinator.build_appliance_manager",
+        return_value=manager,
+    ):
+        coordinator = WhirlpoolCookingCoordinator(hass, entry)
+        data = await coordinator._async_update_data()
+
+    assert data == []
+    manager.connect.assert_awaited_once()
+    assert coordinator.update_interval == SCAN_INTERVAL
 
 
 async def test_disconnect_manager_handles_sync_and_async_disconnects() -> None:

@@ -74,6 +74,7 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
             update_interval=SCAN_INTERVAL,
         )
         self._manager: Any | None = None
+        self._push_connected = False
 
     async def _async_update_data(self) -> list[Any]:
         """Fetch cooking appliance data."""
@@ -89,6 +90,7 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
                 raise UpdateFailed("Unable to fetch Whirlpool appliances")
 
             await self._manager.fetch_all_data()
+            await self._async_connect_push_updates()
 
             appliances = [
                 *getattr(self._manager, "ovens", []),
@@ -103,6 +105,29 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
         """Disconnect push resources if the library created them."""
         if self._manager is not None:
             await async_disconnect_manager(self._manager)
+
+    async def _async_connect_push_updates(self) -> None:
+        """Connect Whirlpool push updates when the library supports them."""
+        if self._manager is None or self._push_connected:
+            return
+
+        connect = getattr(self._manager, "connect", None)
+        if connect is None:
+            return
+
+        try:
+            result = connect()
+            if isawaitable(result):
+                await result
+        except Exception:
+            _LOGGER.warning(
+                "Unable to connect Whirlpool push updates; falling back to polling",
+                exc_info=True,
+            )
+            return
+
+        self._push_connected = True
+        self.update_interval = None
 
 
 async def async_disconnect_manager(manager: Any) -> None:
