@@ -18,6 +18,7 @@ from .cooking import (
     cavity_attribute,
     cook_mode_attribute_value,
     cook_mode_option,
+    get_pending_cook_mode_option,
     set_pending_cook_mode_option,
     supported_cook_mode_options,
 )
@@ -117,10 +118,7 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
                 translation_key=f"{cavity_key}_cook_mode_control",
                 cavity=cavity,
                 options=options,
-                current_fn=lambda item, oven_cavity=cavity: _current_cook_mode(
-                    item,
-                    oven_cavity,
-                ),
+                current_fn=_current_cook_mode_fn(cavity, options),
                 select_fn=lambda item, option, attr=attribute: _send_cook_mode(
                     item,
                     attr,
@@ -131,17 +129,43 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
     return descriptions
 
 
-def _current_cook_mode(appliance: Any, cavity: Any) -> str | None:
+def _current_cook_mode_fn(
+    cavity: Any,
+    options: list[str],
+) -> Callable[[Any], str | None]:
+    """Return a current-option function bound to a cavity and option list."""
+    return lambda item: _current_cook_mode(item, cavity, options)
+
+
+def _current_cook_mode(
+    appliance: Any,
+    cavity: Any,
+    options: list[str],
+) -> str | None:
     """Return the current Whirlpool cook mode without raising into HA."""
+    pending_option = get_pending_cook_mode_option(appliance, cavity)
+    if pending_option in options:
+        return pending_option
+
     try:
-        return cook_mode_option(appliance.get_cook_mode(cavity))
+        current_option = cook_mode_option(appliance.get_cook_mode(cavity))
     except Exception:
         _LOGGER.warning(
             "Unable to read Whirlpool cook mode for %s; returning no value",
             appliance_label(appliance),
             exc_info=True,
         )
-        return None
+        current_option = None
+    if current_option in options:
+        return current_option
+    return _default_cook_mode_option(options)
+
+
+def _default_cook_mode_option(options: list[str]) -> str | None:
+    """Return a friendly default select option instead of HA's unknown state."""
+    if "Bake" in options:
+        return "Bake"
+    return options[0] if options else None
 
 
 async def _send_cook_mode(appliance: Any, attribute: str, option: str) -> bool:

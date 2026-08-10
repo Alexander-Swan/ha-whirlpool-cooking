@@ -471,6 +471,69 @@ def test_cook_mode_options_use_capability_payload(monkeypatch) -> None:
     ]
 
 
+def test_cook_mode_select_defaults_to_bake_when_current_mode_is_unknown(
+    monkeypatch,
+) -> None:
+    """Cook mode controls should not show HA's unknown state by default."""
+    from enum import Enum
+
+    from custom_components.whirlpool_cooking.select import _select_descriptions
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    class CookMode(Enum):
+        Unknown = 0
+        Bake = 2
+        Broil = 8
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_COOK_MODE = "CycleSetCommonMode"
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    oven_module.CookMode = CookMode
+    oven_module.COOK_MODE_MAP = {
+        CookMode.Bake: "2",
+        CookMode.Broil: "8",
+    }
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_CycleSetCommonMode": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return True
+
+        def get_cook_mode(self, cavity):
+            return CookMode.Unknown
+
+        def get_supported_cook_modes(self, cavity):
+            return (CookMode.Bake, CookMode.Broil)
+
+        async def send_attributes(self, attributes) -> bool:
+            return True
+
+    description = _select_descriptions(Appliance())[0]
+
+    assert description.options == ["Bake", "Broil"]
+    assert description.current_fn(Appliance()) == "Bake"
+
+
 def test_microwave_gets_hood_light_and_fan_entities() -> None:
     """Microwave hood attributes should create light and fan entities."""
     from custom_components.whirlpool_cooking.fan import (
