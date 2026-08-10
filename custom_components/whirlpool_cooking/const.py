@@ -27,4 +27,13 @@ REGIONS = [
     REGION_EU,
 ]
 
-PLATFORMS = ["binary_sensor", "button", "fan", "light", "sensor", "switch"]
+PLATFORMS = [
+    "binary_sensor",
+    "button",
+    "fan",
+    "light",
+    "number",
+    "select",
+    "sensor",
+    "switch",
+]

@@ -47,7 +47,9 @@
     },
     "button": {
       "refresh": { "name": "Refresh" },
+      "upper_start_cook": { "name": "Upper start cook" },
       "upper_stop_cook": { "name": "Upper stop cook" },
+      "lower_start_cook": { "name": "Lower start cook" },
       "lower_stop_cook": { "name": "Lower stop cook" }
     },
     "fan": {
@@ -58,6 +60,14 @@
       "lower_light": { "name": "Lower light" },
       "microwave_light": { "name": "Microwave light" },
       "hood_light": { "name": "Hood light" }
+    },
+    "number": {
+      "upper_target_temperature_control": { "name": "Upper target temperature" },
+      "lower_target_temperature_control": { "name": "Lower target temperature" }
+    },
+    "select": {
+      "upper_cook_mode_control": { "name": "Upper cook mode" },
+      "lower_cook_mode_control": { "name": "Lower cook mode" }
     },
     "switch": {
       "control_lock": { "name": "Control lock" },

@@ -204,6 +204,91 @@ def test_single_cavity_oven_stays_on_base_device(monkeypatch) -> None:
     assert cavity_device_key(Appliance(), Cavity.Upper) is None
 
 
+def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
+    """Oven cavities should create cook mode, target temp, and start buttons."""
+    from enum import Enum
+
+    from custom_components.whirlpool_cooking.button import _button_descriptions
+    from custom_components.whirlpool_cooking.cooking import cook_mode_attribute_value
+    from custom_components.whirlpool_cooking.number import _number_descriptions
+    from custom_components.whirlpool_cooking.select import _select_descriptions
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    class CookMode(Enum):
+        Bake = 2
+        ConvectBake = 6
+        Broil = 8
+        ConvectBroil = 9
+        ConvectRoast = 16
+        KeepWarm = 24
+        AirFry = 41
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_COOK_MODE = "CycleSetCommonMode"
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.ATTR_POSTFIX_TARGET_TEMP = "CycleSetTargetTemp"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    oven_module.CookMode = CookMode
+    oven_module.COOK_MODE_MAP = {
+        CookMode.Bake: "2",
+        CookMode.ConvectBake: "6",
+        CookMode.Broil: "8",
+        CookMode.ConvectBroil: "9",
+        CookMode.ConvectRoast: "16",
+        CookMode.KeepWarm: "24",
+        CookMode.AirFry: "41",
+    }
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_CycleSetCommonMode": {"value": "2"},
+                "OvenUpperCavity_CycleSetTargetTemp": {"value": "1750"},
+                "OvenLowerCavity_OpStatusState": {"value": "0"},
+                "OvenLowerCavity_CycleSetCommonMode": {"value": "2"},
+                "OvenLowerCavity_CycleSetTargetTemp": {"value": "1750"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return True
+
+        def get_cook_mode(self, cavity):
+            return CookMode.Bake
+
+        def get_target_temp(self, cavity) -> float:
+            return 175
+
+    appliance = Appliance()
+
+    assert [description.key for description in _select_descriptions(appliance)] == [
+        "upper_cook_mode_control",
+        "lower_cook_mode_control",
+    ]
+    assert [description.key for description in _number_descriptions(appliance)] == [
+        "upper_target_temperature_control",
+        "lower_target_temperature_control",
+    ]
+    assert "upper_start_cook" in [
+        description.key for description in _button_descriptions(appliance)
+    ]
+    assert cook_mode_attribute_value("air_fry") == "41"
+
+
 def test_microwave_gets_hood_light_and_fan_entities() -> None:
     """Microwave hood attributes should create light and fan entities."""
     from custom_components.whirlpool_cooking.fan import (

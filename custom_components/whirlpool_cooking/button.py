@@ -14,6 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
+from .cooking import cook_mode_from_option, cook_mode_option
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists
@@ -68,6 +69,20 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
         cavity_key = cavity.name.lower()
         descriptions.append(
             WhirlpoolButtonDescription(
+                key=f"{cavity_key}_start_cook",
+                translation_key=f"{cavity_key}_start_cook",
+                cavity=cavity,
+                press_fn=(
+                    lambda item, coordinator, oven_cavity=cavity: _async_start_cook(
+                        item,
+                        coordinator,
+                        oven_cavity,
+                    )
+                ),
+            ),
+        )
+        descriptions.append(
+            WhirlpoolButtonDescription(
                 key=f"{cavity_key}_stop_cook",
                 translation_key=f"{cavity_key}_stop_cook",
                 cavity=cavity,
@@ -93,6 +108,24 @@ async def _async_stop_cook(
 ) -> bool:
     """Stop cooking on an oven cavity."""
     result = await appliance.stop_cook(cavity)
+    if result:
+        await coordinator.async_request_refresh()
+    return result
+
+
+async def _async_start_cook(
+    appliance: Any,
+    coordinator: WhirlpoolCookingCoordinator,
+    cavity: Any,
+) -> bool:
+    """Start cooking on an oven cavity using current mode and target temp."""
+    mode_option = cook_mode_option(appliance.get_cook_mode(cavity)) or "bake"
+    target_temp = appliance.get_target_temp(cavity) or 175
+    result = await appliance.set_cook(
+        target_temp,
+        cook_mode_from_option(mode_option),
+        cavity,
+    )
     if result:
         await coordinator.async_request_refresh()
     return result
