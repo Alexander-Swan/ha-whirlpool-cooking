@@ -28,6 +28,8 @@ _LOGGER = logging.getLogger(__name__)
 ATTR_HOOD_SURFACE_LIGHT = "Hood_OperationSetSurfaceLight"
 ATTR_MICROWAVE_LIGHT = "Mwo_DisplaySetLightOn"
 HOOD_LIGHT_MAX_LEVEL = 2
+HOOD_LIGHT_LOW_LEVEL = 2
+HOOD_LIGHT_HIGH_LEVEL = 4
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -151,16 +153,21 @@ def _microwave_light_descriptions(
                 set_fn=lambda item, on: _send_level(
                     item,
                     ATTR_HOOD_SURFACE_LIGHT,
-                    HOOD_LIGHT_MAX_LEVEL if on else 0,
+                    HOOD_LIGHT_HIGH_LEVEL if on else 0,
                 ),
                 brightness_fn=lambda item: _brightness_for_level(
                     _raw_level(item, ATTR_HOOD_SURFACE_LIGHT),
-                    HOOD_LIGHT_MAX_LEVEL,
+                    HOOD_LIGHT_LOW_LEVEL,
+                    high_level=HOOD_LIGHT_HIGH_LEVEL,
                 ),
                 set_brightness_fn=lambda item, brightness: _send_level(
                     item,
                     ATTR_HOOD_SURFACE_LIGHT,
-                    _level_for_brightness(brightness, HOOD_LIGHT_MAX_LEVEL),
+                    _level_for_brightness(
+                        brightness,
+                        HOOD_LIGHT_LOW_LEVEL,
+                        high_level=HOOD_LIGHT_HIGH_LEVEL,
+                    ),
                 ),
                 max_level=HOOD_LIGHT_MAX_LEVEL,
             ),
@@ -185,15 +192,29 @@ def _raw_level(appliance: Any, attribute: str) -> int:
         return 0
 
 
-def _brightness_for_level(level: int, max_level: int) -> int | None:
+def _brightness_for_level(
+    level: int,
+    max_level: int,
+    *,
+    high_level: int | None = None,
+) -> int | None:
     """Return Home Assistant brightness for a raw Whirlpool level."""
     if level <= 0:
         return None
+    if high_level is not None:
+        return 255 if level == high_level else 128
     return round(min(level, max_level) * 255 / max_level)
 
 
-def _level_for_brightness(brightness: int, max_level: int) -> int:
+def _level_for_brightness(
+    brightness: int,
+    max_level: int,
+    *,
+    high_level: int | None = None,
+) -> int:
     """Return a raw Whirlpool level for Home Assistant brightness."""
+    if high_level is not None:
+        return high_level if brightness > 128 else max_level
     return min(max(round(brightness * max_level / 255), 1), max_level)
 
 

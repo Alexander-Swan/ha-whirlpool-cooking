@@ -592,10 +592,19 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     ]
     assert select_descriptions[0].current_fn(appliance) == "Medium"
     assert light_descriptions[1].value_fn(appliance) is True
-    assert light_descriptions[1].brightness_fn(appliance) == 255
+    assert light_descriptions[1].brightness_fn(appliance) == 128
     assert _brightness_for_level(1, 2) == 128
     assert _level_for_brightness(128, 2) == 1
     assert _level_for_brightness(255, 2) == 2
+    assert _brightness_for_level(2, 2, high_level=1) == 128
+    assert _brightness_for_level(4, 2, high_level=4) == 255
+    assert _level_for_brightness(128, 2, high_level=4) == 2
+    assert _level_for_brightness(255, 2, high_level=4) == 4
+
+    asyncio.run(light_descriptions[1].set_fn(appliance, True))
+    assert appliance.sent == {"Hood_OperationSetSurfaceLight": "4"}
+    asyncio.run(light_descriptions[1].set_brightness_fn(appliance, 128))
+    assert appliance.sent == {"Hood_OperationSetSurfaceLight": "2"}
     assert ATTR_HOOD_FAN_SPEED in appliance._data_dict["attributes"]
     assert _speed_value(appliance) == 4
     assert SPEED_TO_PRESET_MODE[4] == "Medium"
