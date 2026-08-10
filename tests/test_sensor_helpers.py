@@ -162,6 +162,9 @@ def test_multi_cavity_oven_gets_cavity_device_keys(monkeypatch) -> None:
         def has_attribute(self, attribute: str) -> bool:
             return attribute in self._data_dict["attributes"]
 
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
         def get_oven_cavity_exists(self, cavity) -> bool:
             return True
 
@@ -212,10 +215,14 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     """Oven cavities should create cook mode, target temp, and start buttons."""
     from enum import Enum
 
+    from homeassistant.components.sensor import SensorDeviceClass
+    from homeassistant.const import UnitOfTime
+
     from custom_components.whirlpool_cooking.button import _button_descriptions
     from custom_components.whirlpool_cooking.cooking import cook_mode_attribute_value
     from custom_components.whirlpool_cooking.number import _number_descriptions
     from custom_components.whirlpool_cooking.select import _select_descriptions
+    from custom_components.whirlpool_cooking.sensor import _sensor_descriptions
 
     class Cavity:
         Upper = type("Upper", (), {"name": "Upper"})()
@@ -259,14 +266,19 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
                 "OvenUpperCavity_OpStatusState": {"value": "0"},
                 "OvenUpperCavity_CycleSetCommonMode": {"value": "2"},
                 "OvenUpperCavity_CycleSetTargetTemp": {"value": "1750"},
+                "OvenUpperCavity_TimeSetCookTimeSet": {"value": "3600"},
                 "OvenLowerCavity_OpStatusState": {"value": "0"},
                 "OvenLowerCavity_CycleSetCommonMode": {"value": "2"},
                 "OvenLowerCavity_CycleSetTargetTemp": {"value": "1750"},
+                "OvenLowerCavity_TimeSetCookTimeSet": {"value": "2700"},
             },
         }
 
         def has_attribute(self, attribute: str) -> bool:
             return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
 
         def get_oven_cavity_exists(self, cavity) -> bool:
             return True
@@ -276,6 +288,9 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
 
         def get_target_temp(self, cavity) -> float:
             return 175
+
+        def get_cook_time(self, cavity) -> int:
+            return 0
 
         def get_supported_cook_modes(self, cavity):
             if cavity is Cavity.Upper:
@@ -292,6 +307,11 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         "upper_target_temperature_control",
         "lower_target_temperature_control",
     ]
+    cook_time_description = _sensor_descriptions(appliance)[4]
+    assert cook_time_description.key == "upper_cook_time"
+    assert cook_time_description.device_class == SensorDeviceClass.DURATION
+    assert cook_time_description.native_unit_of_measurement == UnitOfTime.SECONDS
+    assert cook_time_description.value_fn(appliance) == 3600
     assert _select_descriptions(appliance)[0].options == [
         "Bake",
         "Broil",

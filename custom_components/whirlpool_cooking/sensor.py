@@ -13,13 +13,13 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name, has_attribute
 from .cavity import cavity_exists as _cavity_exists
-from .cooking import enum_label
+from .cooking import cavity_attribute, enum_label
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .temperature import configured_temperature_unit, temperature_from_celsius
@@ -133,7 +133,10 @@ def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescripti
                     key=f"{cavity_key}_cook_time",
                     translation_key=f"{cavity_key}_cook_time",
                     cavity=cavity,
-                    value_fn=lambda item, oven_cavity=cavity: item.get_cook_time(
+                    device_class=SensorDeviceClass.DURATION,
+                    native_unit_of_measurement=UnitOfTime.SECONDS,
+                    value_fn=lambda item, oven_cavity=cavity: _oven_cook_time(
+                        item,
                         oven_cavity,
                     ),
                 ),
@@ -167,6 +170,16 @@ def _microwave_sensor_descriptions(
             WhirlpoolSensorDescription(
                 key=f"microwave_{key}",
                 translation_key=f"microwave_{key}",
+                device_class=(
+                    SensorDeviceClass.DURATION
+                    if key in {"cook_time", "time_remaining"}
+                    else None
+                ),
+                native_unit_of_measurement=(
+                    UnitOfTime.SECONDS
+                    if key in {"cook_time", "time_remaining"}
+                    else None
+                ),
                 value_fn=lambda item, attr=attribute: _raw_attribute_value(item, attr),
             ),
         )
@@ -187,6 +200,28 @@ def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
     if value == "":
         return None
     return value
+
+
+def _oven_cook_time(appliance: Any, cavity: Any) -> int | None:
+    """Return configured oven cook time, falling back to elapsed time."""
+    configured = _raw_int_attribute(
+        appliance,
+        cavity_attribute(cavity, "TimeSetCookTimeSet"),
+    )
+    if configured is not None:
+        return configured
+    return appliance.get_cook_time(cavity)
+
+
+def _raw_int_attribute(appliance: Any, attribute: str) -> int | None:
+    """Return a raw Whirlpool attribute value as an integer."""
+    value = _raw_attribute_value(appliance, attribute)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _has_attribute(appliance: Any, attribute: str) -> bool:
