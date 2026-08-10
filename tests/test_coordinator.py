@@ -188,7 +188,7 @@ def test_known_cooking_model_is_registered_as_oven(monkeypatch) -> None:
     manager._add_appliance(appliance)
 
     assert manager.original_calls == []
-    assert manager.all_appliances == {}
+    assert "all_appliances" not in manager.__dict__
     assert (
         manager._ovens["SAID123"].appliance_data.data_model
         == "ddm_cooking_mhc76_v1"

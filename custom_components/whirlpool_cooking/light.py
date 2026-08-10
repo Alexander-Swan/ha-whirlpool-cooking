@@ -63,7 +63,10 @@ def _light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription]:
 
 def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription]:
     """Build oven cavity light descriptions."""
-    from whirlpool.oven import ATTR_POSTFIX_LIGHT_STATUS, CAVITY_PREFIX_MAP, Cavity
+    try:
+        from whirlpool.oven import ATTR_POSTFIX_LIGHT_STATUS, CAVITY_PREFIX_MAP, Cavity
+    except ModuleNotFoundError:
+        return []
 
     descriptions: list[WhirlpoolLightDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):

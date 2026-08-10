@@ -173,7 +173,10 @@ def _enum_name(value: Any) -> str | None:
 
 def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
     """Build descriptions for oven cavities that exist on the appliance."""
-    from whirlpool.oven import Cavity
+    try:
+        from whirlpool.oven import Cavity
+    except ModuleNotFoundError:
+        return []
 
     descriptions: list[WhirlpoolSensorDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
