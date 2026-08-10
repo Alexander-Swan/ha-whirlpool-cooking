@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
-from .cooking import cavity_attribute
+from .cooking import cavity_attribute, set_pending_target_temperature
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists, _has_attribute
@@ -168,6 +168,12 @@ class WhirlpoolCookingNumber(WhirlpoolCookingEntity, NumberEntity):
             value = temperature_to_celsius(self.coordinator.config_entry, value)
         if not await self.entity_description.set_fn(self.appliance, value):
             raise HomeAssistantError("Whirlpool rejected the number command")
+        if self._is_temperature and self.entity_description.cavity is not None:
+            set_pending_target_temperature(
+                self.appliance,
+                self.entity_description.cavity,
+                value,
+            )
         await self.coordinator.async_request_refresh()
 
     @property

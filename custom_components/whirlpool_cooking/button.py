@@ -14,7 +14,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
-from .cooking import cook_mode_from_option, cook_mode_option
+from .cooking import (
+    cook_mode_from_option,
+    cook_mode_option,
+    get_pending_cook_mode_option,
+    get_pending_target_temperature,
+)
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists
@@ -119,8 +124,16 @@ async def _async_start_cook(
     cavity: Any,
 ) -> bool:
     """Start cooking on an oven cavity using current mode and target temp."""
-    mode_option = cook_mode_option(appliance.get_cook_mode(cavity)) or "bake"
-    target_temp = appliance.get_target_temp(cavity) or 175
+    mode_option = (
+        get_pending_cook_mode_option(appliance, cavity)
+        or cook_mode_option(appliance.get_cook_mode(cavity))
+        or "Bake"
+    )
+    target_temp = (
+        get_pending_target_temperature(appliance, cavity)
+        or appliance.get_target_temp(cavity)
+        or 175
+    )
     result = await appliance.set_cook(
         target_temp,
         cook_mode_from_option(mode_option),

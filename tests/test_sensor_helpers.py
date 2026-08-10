@@ -348,3 +348,53 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert _speed_value(appliance) == 4
     assert _speed_for_percentage(50) == "3"
     assert _speed_for_percentage(100) == "6"
+
+
+def test_start_cook_uses_pending_ha_controls(monkeypatch) -> None:
+    """Start cook should not overwrite a just-set target temperature."""
+    import asyncio
+    from enum import Enum
+
+    from custom_components.whirlpool_cooking.button import _async_start_cook
+    from custom_components.whirlpool_cooking.cooking import (
+        set_pending_cook_mode_option,
+        set_pending_target_temperature,
+    )
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+
+    class CookMode(Enum):
+        Bake = 2
+
+    import types
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.CookMode = CookMode
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        sent = None
+
+        def get_cook_mode(self, cavity):
+            return CookMode.Bake
+
+        def get_target_temp(self, cavity) -> float:
+            return 175
+
+        async def set_cook(self, target_temp, mode, cavity):
+            self.sent = (target_temp, mode, cavity)
+            return True
+
+    class Coordinator:
+        async def async_request_refresh(self) -> None:
+            return None
+
+    appliance = Appliance()
+    set_pending_cook_mode_option(appliance, Cavity.Upper, "Bake")
+    set_pending_target_temperature(appliance, Cavity.Upper, 204.4)
+
+    result = asyncio.run(_async_start_cook(appliance, Coordinator(), Cavity.Upper))
+
+    assert result is True
+    assert appliance.sent == (204.4, CookMode.Bake, Cavity.Upper)

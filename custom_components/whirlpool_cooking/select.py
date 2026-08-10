@@ -18,6 +18,7 @@ from .cooking import (
     cavity_attribute,
     cook_mode_attribute_value,
     cook_mode_option,
+    set_pending_cook_mode_option,
 )
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
@@ -128,6 +129,12 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
             normalized_option,
         ):
             raise HomeAssistantError("Whirlpool rejected the select command")
+        if self.entity_description.cavity is not None:
+            set_pending_cook_mode_option(
+                self.appliance,
+                self.entity_description.cavity,
+                normalized_option,
+            )
         await self.coordinator.async_request_refresh()
 
 
