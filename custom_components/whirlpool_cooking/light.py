@@ -92,7 +92,7 @@ def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription
         ):
             continue
         if not has_callable(appliance, "set_light"):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s does not expose set_light; skipping %s light",
                 appliance_label(appliance),
                 cavity.name.lower(),
@@ -121,6 +121,15 @@ def _microwave_light_descriptions(
     """Build microwave and hood light descriptions."""
     descriptions: list[WhirlpoolLightDescription] = []
     if not has_callable(appliance, "send_attributes"):
+        if _has_attribute(appliance, ATTR_MICROWAVE_LIGHT) or _has_attribute(
+            appliance,
+            ATTR_HOOD_SURFACE_LIGHT,
+        ):
+            _LOGGER.debug(
+                "Whirlpool appliance %s reports microwave or hood light "
+                "attributes but does not expose send_attributes; skipping lights",
+                appliance_label(appliance),
+            )
         return descriptions
 
     if _has_attribute(appliance, ATTR_MICROWAVE_LIGHT):

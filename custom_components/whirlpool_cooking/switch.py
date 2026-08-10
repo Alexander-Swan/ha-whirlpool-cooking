@@ -67,7 +67,7 @@ def _global_switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescripti
             appliance,
             "set_control_locked",
         ):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s reports control lock but lacks the required "
                 "control lock API; skipping control lock switch",
                 appliance_label(appliance),
@@ -89,7 +89,7 @@ def _global_switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescripti
             appliance,
             "set_sabbath_mode",
         ):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s reports Sabbath mode but lacks the required "
                 "Sabbath mode API; skipping Sabbath mode switch",
                 appliance_label(appliance),

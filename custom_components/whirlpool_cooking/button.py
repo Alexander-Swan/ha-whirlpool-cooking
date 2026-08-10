@@ -110,7 +110,7 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
                 ),
             )
         else:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s does not expose set_cook; "
                 "skipping %s start cook",
                 appliance_label(appliance),
@@ -133,7 +133,7 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
                 ),
             )
         else:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s does not expose stop_cook; "
                 "skipping %s stop cook",
                 appliance_label(appliance),

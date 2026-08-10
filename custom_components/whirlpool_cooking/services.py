@@ -122,10 +122,18 @@ def _appliance_from_entity(
         if coordinator is None:
             continue
         for appliance in coordinator.data or []:
-            if str(getattr(appliance, "said", "")) == said:
+            if _appliance_matches_identifier(appliance, said):
                 return appliance, coordinator
 
     raise HomeAssistantError(f"Whirlpool appliance is not loaded: {entity_id}")
+
+
+def _appliance_matches_identifier(appliance: Any, identifier: str) -> bool:
+    """Return true when a device identifier belongs to an appliance."""
+    said = str(getattr(appliance, "said", ""))
+    return bool(said) and (
+        identifier == said or identifier.startswith(f"{said}_")
+    )
 
 
 def _cavity(value: str) -> Any:

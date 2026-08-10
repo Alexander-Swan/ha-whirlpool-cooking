@@ -84,3 +84,20 @@ def test_temperature_helpers_convert_configured_units() -> None:
 
     assert temperature_from_celsius(Entry(), 100) == 212
     assert round(temperature_to_celsius(Entry(), 350), 1) == 176.7
+
+
+def test_service_lookup_matches_child_cavity_device_identifiers() -> None:
+    """Test services can resolve child cavity device identifiers to appliances."""
+    from custom_components.whirlpool_cooking.services import (
+        _appliance_matches_identifier,
+    )
+
+    class Appliance:
+        said = "SAID123"
+
+    appliance = Appliance()
+
+    assert _appliance_matches_identifier(appliance, "SAID123") is True
+    assert _appliance_matches_identifier(appliance, "SAID123_upper") is True
+    assert _appliance_matches_identifier(appliance, "SAID123_lower") is True
+    assert _appliance_matches_identifier(appliance, "OTHER_upper") is False

@@ -153,6 +153,32 @@ expected by the library.
 
 ## Installation
 
+### HACS
+
+1. Open HACS in Home Assistant.
+2. Go to Integrations.
+3. Open the three-dot menu and choose Custom repositories.
+4. Add this repository URL:
+
+```text
+https://github.com/Alexander-Swan/ha-whirlpool-cooking
+```
+
+5. Set the category to Integration.
+6. Select Add.
+7. Search HACS for `Whirlpool Cooking`.
+8. Download the integration.
+9. Restart Home Assistant.
+10. Go to Settings > Devices & services.
+11. Select Add Integration and choose `Whirlpool Cooking`.
+12. Sign in with your Whirlpool-family account, then choose the matching brand,
+    region, and temperature display unit.
+
+If the integration loads but a device exposes fewer entities than expected,
+download diagnostics from the Whirlpool Cooking device entry and include the
+sanitized output when opening an issue. Entity creation is based on the
+attributes and command APIs reported by each appliance.
+
 ### Manual Test Install
 
 Copy the integration directory into your Home Assistant config directory:
@@ -163,15 +189,6 @@ custom_components/whirlpool_cooking -> /config/custom_components/whirlpool_cooki
 
 Then restart Home Assistant and add `Whirlpool Cooking` from
 Settings > Devices & services.
-
-### HACS Custom Repository
-
-1. Add this repository to HACS as a custom repository:
-   `https://github.com/Alexander-Swan/ha-whirlpool-cooking`
-2. Select category `Integration`.
-3. Download the integration.
-4. Restart Home Assistant.
-5. Add `Whirlpool Cooking` from Settings > Devices & services.
 
 ## Supported Brands
 
@@ -192,20 +209,3 @@ Settings > Devices & services.
   remote-control permissions, door state, or regional/model capability.
 - If setup succeeds but entities are empty or unavailable, download diagnostics
   from the device entry and open an issue with the sanitized output.
-
-## Development
-
-Home Assistant currently requires Python 3.14.2 or newer for a full development
-environment. Older local Python versions can still run the static tests, but the
-Home Assistant runtime tests will be skipped.
-
-```powershell
-python -m pip install -r requirements_test.txt
-$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
-python -m pytest tests/test_sensor_helpers.py tests/test_entity_helpers.py tests/test_manifest.py tests/test_static_integration_files.py
-```
-
-The full Home Assistant pytest plugin suite is exercised by GitHub Actions on
-Linux. On Windows, the Home Assistant test plugin currently imports HA's
-POSIX-only runner path before collection, so local smoke tests should use the
-plugin-disabled command above.

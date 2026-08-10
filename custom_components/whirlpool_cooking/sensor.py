@@ -717,7 +717,7 @@ def _safe_cavity_value(
 
 def _log_missing_method(appliance: Any, method_name: str, entity_key: str) -> None:
     """Log a skipped entity caused by a missing Whirlpool library method."""
-    _LOGGER.warning(
+    _LOGGER.debug(
         "Whirlpool appliance %s does not expose %s; skipping %s",
         appliance_label(appliance),
         method_name,

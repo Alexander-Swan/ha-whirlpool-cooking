@@ -54,7 +54,7 @@ def _hood_fan_supported(appliance: Any) -> bool:
     if not _has_attribute(appliance, ATTR_HOOD_FAN_SPEED):
         return False
     if not has_callable(appliance, "send_attributes"):
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Whirlpool appliance %s reports hood fan speed but does not "
             "expose send_attributes; skipping hood fan",
             appliance_label(appliance),

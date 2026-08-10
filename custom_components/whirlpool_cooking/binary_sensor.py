@@ -77,7 +77,7 @@ def _cavity_binary_sensor_descriptions(
                 ),
             )
         else:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s does not expose get_door_opened; "
                 "skipping %s_door",
                 appliance_label(appliance),

@@ -91,7 +91,7 @@ def _cavity_number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescripti
             appliance,
             "send_attributes",
         ):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s reports target temperature but lacks "
                 "the required target temperature API; skipping %s target "
                 "temperature control",

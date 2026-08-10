@@ -91,7 +91,7 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
             appliance,
             "send_attributes",
         ):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Whirlpool appliance %s reports cook mode but lacks the required "
                 "cook mode API; skipping %s cook mode control",
                 appliance_label(appliance),

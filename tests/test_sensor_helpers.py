@@ -630,7 +630,7 @@ def test_missing_library_methods_skip_entities_and_log(
 
     appliance = Appliance()
 
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.DEBUG)
 
     assert _sensor_descriptions(appliance) == []
     assert [
@@ -646,3 +646,52 @@ def test_missing_library_methods_skip_entities_and_log(
     assert _switch_descriptions(appliance) == []
     assert _hood_fan_supported(appliance) is False
     assert "does not expose get_cavity_state" in caplog.text
+
+
+def test_sensor_setup_skips_bad_appliance_and_adds_supported_entities() -> None:
+    """A bad appliance should not prevent supported entities from loading."""
+    import asyncio
+
+    from custom_components.whirlpool_cooking.sensor import async_setup_entry
+
+    class BadAppliance:
+        name = "Bad payload"
+
+        def has_attribute(self, attribute: str) -> bool:
+            raise RuntimeError("broken has_attribute")
+
+    class ApplianceInfo:
+        data_model = "ddm_cooking_mhc76_v1"
+        category = "cooking"
+
+    class GoodAppliance:
+        appliance_info = ApplianceInfo()
+        name = "Good microwave"
+        _data_dict = {
+            "attributes": {
+                "CookCycleStatusState": {"value": "3"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+    class Coordinator:
+        data = [BadAppliance(), GoodAppliance()]
+
+    class Entry:
+        runtime_data = Coordinator()
+
+    entities = []
+
+    def async_add_entities(new_entities) -> None:
+        entities.extend(new_entities)
+
+    asyncio.run(async_setup_entry(None, Entry(), async_add_entities))
+
+    assert [entity.entity_description.key for entity in entities] == [
+        "microwave_state",
+    ]
