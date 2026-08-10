@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -12,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -29,6 +30,24 @@ class WhirlpoolSensorDescription(SensorEntityDescription):
 
 
 SENSORS: tuple[WhirlpoolSensorDescription, ...] = ()
+
+RAW_ATTRIBUTE_KEYWORDS = (
+    "alert",
+    "cook",
+    "cycle",
+    "door",
+    "error",
+    "light",
+    "mode",
+    "online",
+    "operation",
+    "remote",
+    "set",
+    "state",
+    "status",
+    "temp",
+    "time",
+)
 
 
 def _enum_name(value: Any) -> str | None:
@@ -101,10 +120,83 @@ def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescripti
 
 def _cavity_exists(appliance: Any, cavity: Any) -> bool:
     """Return true when the Whirlpool API reports that an oven cavity exists."""
+    from whirlpool.oven import ATTR_POSTFIX_STATUS_STATE, CAVITY_PREFIX_MAP
+
+    if not _has_attribute(
+        appliance,
+        f"{CAVITY_PREFIX_MAP[cavity]}_{ATTR_POSTFIX_STATUS_STATE}",
+    ):
+        return False
+
     exists = getattr(appliance, "get_oven_cavity_exists", None)
     if exists is None:
         return False
     return bool(exists(cavity))
+
+
+def _sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
+    """Build all sensor descriptions for an appliance."""
+    descriptions = [*SENSORS, *_cavity_sensor_descriptions(appliance)]
+    if len(descriptions) > len(SENSORS):
+        return descriptions
+    return [*descriptions, *_raw_attribute_sensor_descriptions(appliance)]
+
+
+def _raw_attribute_sensor_descriptions(
+    appliance: Any,
+) -> list[WhirlpoolSensorDescription]:
+    """Expose useful raw API attributes when no typed cooking API matches."""
+    return [
+        WhirlpoolSensorDescription(
+            key=f"raw_{_slugify_attribute_key(attribute)}",
+            name=_humanize_attribute_key(attribute),
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda item, attr=attribute: _raw_attribute_value(item, attr),
+        )
+        for attribute in _raw_attribute_keys(appliance)
+        if _should_expose_raw_attribute(attribute)
+    ]
+
+
+def _raw_attribute_keys(appliance: Any) -> list[str]:
+    """Return raw Whirlpool attribute keys from the fetched data payload."""
+    attributes = getattr(appliance, "_data_dict", {}).get("attributes", {})
+    if not isinstance(attributes, dict):
+        return []
+    return sorted(str(attribute) for attribute in attributes)
+
+
+def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
+    """Return a raw Whirlpool attribute value."""
+    value = getattr(appliance, "_get_attribute", lambda _: None)(attribute)
+    if value == "":
+        return None
+    return value
+
+
+def _should_expose_raw_attribute(attribute: str) -> bool:
+    """Return true for raw attributes that are useful as HA entities."""
+    normalized = attribute.lower()
+    return any(keyword in normalized for keyword in RAW_ATTRIBUTE_KEYWORDS)
+
+
+def _has_attribute(appliance: Any, attribute: str) -> bool:
+    """Return true if an appliance reports a raw Whirlpool attribute."""
+    has_attribute = getattr(appliance, "has_attribute", None)
+    if has_attribute is None:
+        return False
+    return bool(has_attribute(attribute))
+
+
+def _slugify_attribute_key(attribute: str) -> str:
+    """Return a Home Assistant-safe key for a raw Whirlpool attribute."""
+    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", attribute.lower())).strip("_")
+
+
+def _humanize_attribute_key(attribute: str) -> str:
+    """Return a readable name for a raw Whirlpool attribute."""
+    spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", attribute.replace("_", " "))
+    return " ".join(spaced.split())
 
 
 async def async_setup_entry(
@@ -117,7 +209,7 @@ async def async_setup_entry(
     async_add_entities(
         WhirlpoolCookingSensor(coordinator, appliance, description)
         for appliance in coordinator.data
-        for description in (*SENSORS, *_cavity_sensor_descriptions(appliance))
+        for description in _sensor_descriptions(appliance)
     )
 
 

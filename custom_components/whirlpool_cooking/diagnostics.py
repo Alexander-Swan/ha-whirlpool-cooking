@@ -63,8 +63,10 @@ def _describe_appliance(appliance: Any) -> dict[str, Any]:
             "data_model",
             "data_model_key",
             "DATA_MODEL_KEY",
+            "appliance_info.data_model",
         ),
         "type": type(appliance).__name__,
+        "raw_attribute_keys": _raw_attribute_keys(appliance),
         "available_attributes": sorted(
             name
             for name in dir(appliance)
@@ -76,14 +78,36 @@ def _describe_appliance(appliance: Any) -> dict[str, Any]:
 def _read(source: Any, *names: str) -> Any:
     """Read the first present attribute."""
     for name in names:
-        if isinstance(source, dict) and name in source:
-            return source[name]
-        if hasattr(source, name):
-            value = getattr(source, name)
-            if callable(value):
-                try:
-                    return value()
-                except TypeError:
-                    return None
-            return value
+        target = source
+        parts = name.split(".")
+        missing = False
+        for part in parts:
+            if isinstance(target, dict) and part in target:
+                target = target[part]
+                continue
+            if not hasattr(target, part):
+                missing = True
+                break
+            target = getattr(target, part)
+        if missing:
+            continue
+        value = target
+        if callable(value):
+            try:
+                return value()
+            except TypeError:
+                return None
+        return value
     return None
+
+
+def _raw_attribute_keys(appliance: Any) -> list[str]:
+    """Return safe raw Whirlpool attribute keys for diagnostics."""
+    attributes = getattr(appliance, "_data_dict", {}).get("attributes", {})
+    if not isinstance(attributes, dict):
+        return []
+    return sorted(
+        str(name)
+        for name in attributes
+        if not any(secret in str(name).lower() for secret in TO_REDACT)
+    )

@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, _value
+from .sensor import _cavity_exists
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,8 +46,7 @@ def _cavity_binary_sensor_descriptions(
 
     descriptions: list[WhirlpoolBinarySensorDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
-        exists = getattr(appliance, "get_oven_cavity_exists", None)
-        if exists is None or not exists(cavity):
+        if not _cavity_exists(appliance, cavity):
             continue
 
         cavity_key = cavity.name.lower()
