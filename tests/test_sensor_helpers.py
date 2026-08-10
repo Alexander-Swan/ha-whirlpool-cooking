@@ -287,10 +287,21 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         "upper_target_temperature_control",
         "lower_target_temperature_control",
     ]
+    assert _select_descriptions(appliance)[0].options == [
+        "Air Fry",
+        "Bake",
+        "Broil",
+        "Convect Bake",
+        "Convect Broil",
+        "Convect Roast",
+        "Keep Warm",
+    ]
+    assert _select_descriptions(appliance)[0].current_fn(appliance) == "Bake"
     assert "upper_start_cook" in [
         description.key for description in _button_descriptions(appliance)
     ]
     assert cook_mode_attribute_value("air_fry") == "41"
+    assert cook_mode_attribute_value("Air Fry") == "41"
 
 
 def test_microwave_gets_hood_light_and_fan_entities() -> None:

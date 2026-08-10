@@ -13,8 +13,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
-from .cooking import COOK_MODE_OPTIONS, cavity_attribute, cook_mode_attribute_value
-from .cooking import cook_mode_option as _cook_mode_option
+from .cooking import (
+    COOK_MODE_OPTIONS,
+    cavity_attribute,
+    cook_mode_attribute_value,
+    cook_mode_option,
+)
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .sensor import _cavity_exists, _has_attribute
@@ -68,7 +72,7 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
                 translation_key=f"{cavity_key}_cook_mode_control",
                 cavity=cavity,
                 options=list(COOK_MODE_OPTIONS),
-                current_fn=lambda item, oven_cavity=cavity: _cook_mode_option(
+                current_fn=lambda item, oven_cavity=cavity: cook_mode_option(
                     item.get_cook_mode(oven_cavity),
                 ),
                 select_fn=lambda item, option, attr=attribute: _send_cook_mode(
@@ -116,8 +120,22 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Select an option."""
-        if option not in self.entity_description.options:
+        normalized_option = cook_mode_option_from_alias(option)
+        if normalized_option not in self.entity_description.options:
             raise HomeAssistantError(f"Unsupported Whirlpool option: {option}")
-        if not await self.entity_description.select_fn(self.appliance, option):
+        if not await self.entity_description.select_fn(
+            self.appliance,
+            normalized_option,
+        ):
             raise HomeAssistantError("Whirlpool rejected the select command")
         await self.coordinator.async_request_refresh()
+
+
+def cook_mode_option_from_alias(option: str) -> str:
+    """Return a canonical cook mode option from a display or legacy value."""
+    from .cooking import cook_mode_from_option
+
+    try:
+        return cook_mode_option(cook_mode_from_option(option)) or option
+    except ValueError:
+        return option

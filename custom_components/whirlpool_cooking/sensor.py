@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name, has_attribute
 from .cavity import cavity_exists as _cavity_exists
+from .cooking import enum_label
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
 from .temperature import configured_temperature_unit, temperature_from_celsius
@@ -77,9 +78,7 @@ MICROWAVE_SENSOR_SPECS = (
 
 def _enum_name(value: Any) -> str | None:
     """Return a stable state string for Whirlpool enum values."""
-    if value is None:
-        return None
-    return str(getattr(value, "name", value)).lower()
+    return enum_label(value)
 
 
 def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
