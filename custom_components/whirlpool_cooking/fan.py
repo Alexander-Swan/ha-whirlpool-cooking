@@ -21,19 +21,31 @@ ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
 HOOD_FAN_MAX_SPEED = 4
 
 SPEED_TO_PRESET_MODE = {
-    1: "Low",
-    2: "Medium",
+    1: "High",
+    2: "Low",
     3: "Medium-high",
-    4: "High",
+    4: "Medium",
 }
 PRESET_MODE_TO_SPEED = {
     preset_mode: str(speed)
     for speed, preset_mode in SPEED_TO_PRESET_MODE.items()
 }
-PERCENTAGE_TO_SPEED = tuple(
-    (round(speed * 100 / HOOD_FAN_MAX_SPEED), str(speed))
-    for speed in range(HOOD_FAN_MAX_SPEED + 1)
+PRESET_MODES = ("Low", "Medium", "Medium-high", "High")
+PERCENTAGE_TO_SPEED = (
+    (0, "0"),
+    (25, PRESET_MODE_TO_SPEED["Low"]),
+    (50, PRESET_MODE_TO_SPEED["Medium"]),
+    (75, PRESET_MODE_TO_SPEED["Medium-high"]),
+    (100, PRESET_MODE_TO_SPEED["High"]),
 )
+SPEED_TO_PERCENTAGE = {
+    0: 0,
+    **{
+        int(speed): percentage
+        for percentage, speed in PERCENTAGE_TO_SPEED
+        if int(speed) > 0
+    },
+}
 
 
 async def async_setup_entry(
@@ -82,7 +94,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
         | FanEntityFeature.TURN_OFF
         | FanEntityFeature.TURN_ON
     )
-    _attr_preset_modes = list(PRESET_MODE_TO_SPEED)
+    _attr_preset_modes = list(PRESET_MODES)
     _attr_speed_count = HOOD_FAN_MAX_SPEED
     _attr_translation_key = "hood_fan"
 
@@ -106,9 +118,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
         speed = _speed_value(self.appliance)
         if speed is None:
             return None
-        if speed <= 0:
-            return 0
-        return round(min(speed, HOOD_FAN_MAX_SPEED) * 100 / HOOD_FAN_MAX_SPEED)
+        return SPEED_TO_PERCENTAGE.get(speed, 0 if speed <= 0 else None)
 
     @property
     def preset_mode(self) -> str | None:
@@ -116,7 +126,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
         speed = _speed_value(self.appliance)
         if speed is None or speed <= 0:
             return None
-        return SPEED_TO_PRESET_MODE.get(min(speed, HOOD_FAN_MAX_SPEED))
+        return SPEED_TO_PRESET_MODE.get(speed)
 
     async def async_turn_on(
         self,

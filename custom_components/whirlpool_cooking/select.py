@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -24,13 +25,19 @@ from .cooking import (
 )
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
-from .fan import ATTR_HOOD_FAN_SPEED, PRESET_MODE_TO_SPEED, SPEED_TO_PRESET_MODE
+from .fan import (
+    ATTR_HOOD_FAN_SPEED,
+    PRESET_MODE_TO_SPEED,
+    PRESET_MODES,
+    SPEED_TO_PRESET_MODE,
+)
 from .sensor import _cavity_exists, _has_attribute
 
 _LOGGER = logging.getLogger(__name__)
 
 HOOD_FAN_OFF = "Off"
-HOOD_FAN_MODE_OPTIONS = [HOOD_FAN_OFF, *PRESET_MODE_TO_SPEED]
+HOOD_FAN_MODE_OPTIONS = [HOOD_FAN_OFF, *PRESET_MODES]
+OPTIMISTIC_OPTION_SECONDS = 15.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -258,10 +265,18 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
             device_name=cavity_device_name(appliance, description.cavity),
         )
         self.entity_description = description
+        self._optimistic_option: str | None = None
+        self._optimistic_option_until = 0.0
 
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
+        if (
+            self._optimistic_option in self.entity_description.options
+            and time.monotonic() < self._optimistic_option_until
+        ):
+            return self._optimistic_option
+        self._optimistic_option = None
         return self.entity_description.current_fn(self.appliance)
 
     async def async_select_option(self, option: str) -> None:
@@ -278,6 +293,8 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
             normalized_option,
         ):
             raise HomeAssistantError("Whirlpool rejected the select command")
+        self._optimistic_option = normalized_option
+        self._optimistic_option_until = time.monotonic() + OPTIMISTIC_OPTION_SECONDS
         if self.entity_description.cavity is not None:
             set_pending_cook_mode_option(
                 self.appliance,
