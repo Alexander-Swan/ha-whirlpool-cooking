@@ -42,14 +42,16 @@ def test_non_cavity_microwave_attributes_get_stable_sensor_descriptions() -> Non
     descriptions = _sensor_descriptions(Appliance())
 
     assert [description.key for description in descriptions] == [
+        "wifi_rssi",
         "microwave_state",
         "microwave_mode",
         "microwave_cook_time",
         "microwave_time_remaining",
     ]
-    assert descriptions[0].value_fn(Appliance()) == "3"
-    assert descriptions[2].value_fn(Appliance()) == "1:39:59"
-    assert descriptions[3].value_fn(Appliance()) == "0:30"
+    assert descriptions[0].value_fn(Appliance()) == -50
+    assert descriptions[1].value_fn(Appliance()) == "3"
+    assert descriptions[3].value_fn(Appliance()) == "1:39:59"
+    assert descriptions[4].value_fn(Appliance()) == "0:30"
 
 
 def test_diagnostics_reads_nested_appliance_info() -> None:
@@ -127,6 +129,60 @@ def test_oven_cavities_get_light_entities(monkeypatch) -> None:
         "lower_light",
     ]
     assert descriptions[0].value_fn(Appliance()) is True
+
+
+def test_oven_cavities_get_door_lock_entities(monkeypatch) -> None:
+    """Oven cavity door lock attributes should create binary sensors."""
+    from custom_components.whirlpool_cooking.binary_sensor import (
+        _cavity_binary_sensor_descriptions,
+    )
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_OpStatusDoorLocked": {"value": "1"},
+                "OvenLowerCavity_OpStatusState": {"value": "0"},
+                "OvenLowerCavity_OpStatusDoorLocked": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return True
+
+        def get_door_opened(self, cavity) -> bool:
+            return False
+
+    descriptions = _cavity_binary_sensor_descriptions(Appliance())
+
+    assert [description.key for description in descriptions] == [
+        "upper_door",
+        "upper_door_locked",
+        "lower_door",
+        "lower_door_locked",
+    ]
+    assert descriptions[1].value_fn(Appliance()) is True
 
 
 def test_multi_cavity_oven_gets_cavity_device_keys(monkeypatch) -> None:
@@ -266,6 +322,11 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
                 "OvenUpperCavity_CycleSetCommonMode": {"value": "2"},
                 "OvenUpperCavity_CycleSetTargetTemp": {"value": "1750"},
                 "OvenUpperCavity_TimeSetCookTimeSet": {"value": "3600"},
+                "OvenUpperCavity_TimeStatusCookTimeRemaining": {"value": "120"},
+                "OvenUpperCavity_TimeStatusDelayTimeRemaining": {"value": "30"},
+                "OvenUpperCavity__RecipeSetFacadeCookTime": {"value": "5400"},
+                "OvenUpperCavity__RecipeSetFacadeDisplayTemp": {"value": "1770"},
+                "OvenUpperCavity__RecipeSetFacadeMode": {"value": "2"},
                 "OvenLowerCavity_OpStatusState": {"value": "0"},
                 "OvenLowerCavity_CycleSetCommonMode": {"value": "2"},
                 "OvenLowerCavity_CycleSetTargetTemp": {"value": "1750"},
@@ -311,6 +372,23 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     assert cook_time_description.device_class is None
     assert cook_time_description.native_unit_of_measurement is None
     assert cook_time_description.value_fn(appliance) == "1:00:00"
+    assert [
+        description.key for description in _sensor_descriptions(appliance)[:10]
+    ] == [
+        "upper_state",
+        "upper_mode",
+        "upper_temperature",
+        "upper_target_temperature",
+        "upper_cook_time",
+        "upper_cook_time_remaining",
+        "upper_delay_time_remaining",
+        "upper_recipe_cook_time",
+        "upper_recipe_temperature",
+        "upper_recipe_mode",
+    ]
+    assert _sensor_descriptions(appliance)[5].value_fn(appliance) == "2:00"
+    assert _sensor_descriptions(appliance)[7].value_fn(appliance) == "1:30:00"
+    assert _sensor_descriptions(appliance)[8].value_fn(appliance) == 177
     assert _select_descriptions(appliance)[0].options == [
         "Bake",
         "Broil",

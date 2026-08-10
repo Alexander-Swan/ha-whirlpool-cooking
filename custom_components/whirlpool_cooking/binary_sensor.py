@@ -16,9 +16,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
+from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, _value
-from .sensor import _cavity_exists
+from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,18 +52,40 @@ def _cavity_binary_sensor_descriptions(
             continue
 
         cavity_key = cavity.name.lower()
-        descriptions.append(
-            WhirlpoolBinarySensorDescription(
-                key=f"{cavity_key}_door",
-                translation_key=f"{cavity_key}_door",
-                cavity=cavity,
-                device_class=BinarySensorDeviceClass.DOOR,
-                value_fn=lambda item, oven_cavity=cavity: _as_bool(
-                    item.get_door_opened(oven_cavity),
+        descriptions.extend(
+            (
+                WhirlpoolBinarySensorDescription(
+                    key=f"{cavity_key}_door",
+                    translation_key=f"{cavity_key}_door",
+                    cavity=cavity,
+                    device_class=BinarySensorDeviceClass.DOOR,
+                    value_fn=lambda item, oven_cavity=cavity: _as_bool(
+                        item.get_door_opened(oven_cavity),
+                    ),
+                ),
+                WhirlpoolBinarySensorDescription(
+                    key=f"{cavity_key}_door_locked",
+                    translation_key=f"{cavity_key}_door_locked",
+                    cavity=cavity,
+                    device_class=BinarySensorDeviceClass.LOCK,
+                    value_fn=lambda item, oven_cavity=cavity: _as_bool(
+                        _raw_attribute_value(
+                            item,
+                            cavity_attribute(oven_cavity, "OpStatusDoorLocked"),
+                        ),
+                    ),
                 ),
             ),
         )
-    return descriptions
+    return [
+        description
+        for description in descriptions
+        if not description.key.endswith("_door_locked")
+        or _has_attribute(
+            appliance,
+            cavity_attribute(description.cavity, "OpStatusDoorLocked"),
+        )
+    ]
 
 
 async def async_setup_entry(
