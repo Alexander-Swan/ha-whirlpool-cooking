@@ -24,6 +24,7 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(
         entry,
         [Platform(platform) for platform in PLATFORMS],
@@ -43,3 +44,11 @@ async def async_unload_entry(
     if unload_ok:
         await entry.runtime_data.async_shutdown()
     return unload_ok
+
+
+async def _async_update_listener(
+    hass: HomeAssistant,
+    entry: WhirlpoolCookingConfigEntry,
+) -> None:
+    """Reload Whirlpool Cooking when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)

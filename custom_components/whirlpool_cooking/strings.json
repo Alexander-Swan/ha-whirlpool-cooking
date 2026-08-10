@@ -21,6 +21,16 @@
       "already_configured": "This account is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Whirlpool Cooking Options",
+        "data": {
+          "temperature_unit": "Temperature unit"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "upper_state": { "name": "Upper state" },

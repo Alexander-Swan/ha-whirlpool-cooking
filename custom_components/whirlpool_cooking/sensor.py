@@ -21,6 +21,7 @@ from .cavity import cavity_device_key, cavity_device_name, has_attribute
 from .cavity import cavity_exists as _cavity_exists
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
+from .temperature import configured_temperature_unit, temperature_from_celsius
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -278,4 +279,14 @@ class WhirlpoolCookingSensor(WhirlpoolCookingEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the native value."""
-        return self.entity_description.value_fn(self.appliance)
+        value = self.entity_description.value_fn(self.appliance)
+        if self.entity_description.device_class == SensorDeviceClass.TEMPERATURE:
+            return temperature_from_celsius(self.coordinator.config_entry, value)
+        return value
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the native unit of measurement."""
+        if self.entity_description.device_class == SensorDeviceClass.TEMPERATURE:
+            return configured_temperature_unit(self.coordinator.config_entry)
+        return self.entity_description.native_unit_of_measurement

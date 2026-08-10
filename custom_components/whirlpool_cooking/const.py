@@ -6,6 +6,7 @@ DOMAIN = "whirlpool_cooking"
 
 CONF_BRAND = "brand"
 CONF_REGION = "region"
+CONF_TEMPERATURE_UNIT = "temperature_unit"
 
 BRAND_WHIRLPOOL = "whirlpool"
 BRAND_KITCHENAID = "kitchenaid"
@@ -25,6 +26,14 @@ BRANDS = [
 REGIONS = [
     REGION_US,
     REGION_EU,
+]
+
+TEMP_UNIT_CELSIUS = "celsius"
+TEMP_UNIT_FAHRENHEIT = "fahrenheit"
+
+TEMP_UNITS = [
+    TEMP_UNIT_CELSIUS,
+    TEMP_UNIT_FAHRENHEIT,
 ]
 
 PLATFORMS = [

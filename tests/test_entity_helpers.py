@@ -49,3 +49,21 @@ def test_diagnostics_read_handles_callables_requiring_args() -> None:
     from custom_components.whirlpool_cooking.diagnostics import _read
 
     assert _read(FakeAppliance(), "state") is None
+
+
+def test_temperature_helpers_convert_configured_units() -> None:
+    """Test configured temperature unit conversion."""
+    from custom_components.whirlpool_cooking.const import (
+        CONF_TEMPERATURE_UNIT,
+        TEMP_UNIT_FAHRENHEIT,
+    )
+    from custom_components.whirlpool_cooking.temperature import (
+        temperature_from_celsius,
+        temperature_to_celsius,
+    )
+
+    class Entry:
+        options = {CONF_TEMPERATURE_UNIT: TEMP_UNIT_FAHRENHEIT}
+
+    assert temperature_from_celsius(Entry(), 100) == 212
+    assert round(temperature_to_celsius(Entry(), 350), 1) == 176.7

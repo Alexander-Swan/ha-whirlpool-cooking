@@ -11,7 +11,16 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import BRANDS, CONF_BRAND, CONF_REGION, DOMAIN, REGIONS
+from .const import (
+    BRANDS,
+    CONF_BRAND,
+    CONF_REGION,
+    CONF_TEMPERATURE_UNIT,
+    DOMAIN,
+    REGIONS,
+    TEMP_UNIT_CELSIUS,
+    TEMP_UNITS,
+)
 from .coordinator import async_disconnect_manager, build_appliance_manager
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,6 +32,13 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Whirlpool Cooking config flow."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Create the options flow."""
+        return WhirlpoolCookingOptionsFlow(config_entry)
 
     async def async_step_user(
         self,
@@ -94,4 +110,35 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 },
             ),
             errors=errors,
+        )
+
+
+class WhirlpoolCookingOptionsFlow(config_entries.OptionsFlow):
+    """Handle Whirlpool Cooking options."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize the options flow."""
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Manage Whirlpool Cooking options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_TEMPERATURE_UNIT,
+                        default=self._config_entry.options.get(
+                            CONF_TEMPERATURE_UNIT,
+                            TEMP_UNIT_CELSIUS,
+                        ),
+                    ): vol.In(TEMP_UNITS),
+                },
+            ),
         )
