@@ -12,15 +12,23 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_non_cavity_raw_attributes_get_sensor_descriptions() -> None:
-    """Microwave-style cooking payloads should still create useful sensors."""
+def test_non_cavity_microwave_attributes_get_stable_sensor_descriptions() -> None:
+    """Microwave-style cooking payloads should create stable sensors."""
     from custom_components.whirlpool_cooking.sensor import _sensor_descriptions
 
+    class ApplianceInfo:
+        data_model = "ddm_cooking_mhc76_v1"
+        category = "cooking"
+
     class Appliance:
+        appliance_info = ApplianceInfo()
+        name = "microwave"
         _data_dict = {
             "attributes": {
+                "CookCycleMode": {"value": "8"},
                 "CookCycleStatusState": {"value": "3"},
                 "CookCycleSetTime": {"value": "60"},
+                "CookCycleTimeRemaining": {"value": "30"},
                 "WifiRssi": {"value": "-50"},
             },
         }
@@ -34,8 +42,10 @@ def test_non_cavity_raw_attributes_get_sensor_descriptions() -> None:
     descriptions = _sensor_descriptions(Appliance())
 
     assert [description.key for description in descriptions] == [
-        "raw_cookcyclestatusstate",
-        "raw_cookcyclesettime",
+        "microwave_state",
+        "microwave_mode",
+        "microwave_cook_time",
+        "microwave_time_remaining",
     ]
     assert descriptions[0].value_fn(Appliance()) == "3"
 

@@ -32,7 +32,13 @@
       "lower_mode": { "name": "Lower mode" },
       "lower_temperature": { "name": "Lower temperature" },
       "lower_target_temperature": { "name": "Lower target temperature" },
-      "lower_cook_time": { "name": "Lower cook time" }
+      "lower_cook_time": { "name": "Lower cook time" },
+      "microwave_state": { "name": "State" },
+      "microwave_mode": { "name": "Mode" },
+      "microwave_cook_time": { "name": "Cook time" },
+      "microwave_time_remaining": { "name": "Time remaining" },
+      "microwave_temperature": { "name": "Temperature" },
+      "microwave_target_temperature": { "name": "Target temperature" }
     },
     "binary_sensor": {
       "upper_door": { "name": "Upper door" },

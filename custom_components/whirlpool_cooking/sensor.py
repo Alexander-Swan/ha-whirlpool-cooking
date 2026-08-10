@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -32,21 +32,43 @@ class WhirlpoolSensorDescription(SensorEntityDescription):
 SENSORS: tuple[WhirlpoolSensorDescription, ...] = ()
 
 RAW_ATTRIBUTE_KEYWORDS = (
-    "alert",
     "cook",
     "cycle",
-    "door",
-    "error",
-    "light",
-    "mode",
-    "online",
-    "operation",
-    "remote",
-    "set",
-    "state",
-    "status",
-    "temp",
-    "time",
+    "microwave",
+    "mwo",
+)
+
+MICROWAVE_SENSOR_SPECS = (
+    (
+        "state",
+        (("status", "state"), ("cycle", "state")),
+        ("door", "light", "timer"),
+    ),
+    (
+        "mode",
+        (("cook", "mode"), ("cycle", "mode"), ("mode",)),
+        ("remote", "sabbath"),
+    ),
+    (
+        "cook_time",
+        (("cook", "time"), ("cycle", "set", "time")),
+        ("elapsed", "remaining"),
+    ),
+    (
+        "time_remaining",
+        (("time", "remaining"), ("remaining", "time")),
+        ("timer",),
+    ),
+    (
+        "temperature",
+        (("display", "temp"), ("status", "temp")),
+        ("target", "set"),
+    ),
+    (
+        "target_temperature",
+        (("target", "temp"), ("set", "temp")),
+        (),
+    ),
 )
 
 
@@ -139,23 +161,30 @@ def _sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
     descriptions = [*SENSORS, *_cavity_sensor_descriptions(appliance)]
     if len(descriptions) > len(SENSORS):
         return descriptions
-    return [*descriptions, *_raw_attribute_sensor_descriptions(appliance)]
+    return [*descriptions, *_microwave_sensor_descriptions(appliance)]
 
 
-def _raw_attribute_sensor_descriptions(
+def _microwave_sensor_descriptions(
     appliance: Any,
 ) -> list[WhirlpoolSensorDescription]:
-    """Expose useful raw API attributes when no typed cooking API matches."""
-    return [
-        WhirlpoolSensorDescription(
-            key=f"raw_{_slugify_attribute_key(attribute)}",
-            name=_humanize_attribute_key(attribute),
-            entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda item, attr=attribute: _raw_attribute_value(item, attr),
+    """Build stable microwave sensors from known raw Whirlpool attributes."""
+    descriptions: list[WhirlpoolSensorDescription] = []
+    if not _is_microwave_like(appliance):
+        return descriptions
+
+    for key, token_groups, excluded_tokens in MICROWAVE_SENSOR_SPECS:
+        attribute = _find_raw_attribute(appliance, token_groups, excluded_tokens)
+        if attribute is None:
+            continue
+
+        descriptions.append(
+            WhirlpoolSensorDescription(
+                key=f"microwave_{key}",
+                translation_key=f"microwave_{key}",
+                value_fn=lambda item, attr=attribute: _raw_attribute_value(item, attr),
+            ),
         )
-        for attribute in _raw_attribute_keys(appliance)
-        if _should_expose_raw_attribute(attribute)
-    ]
+    return descriptions
 
 
 def _raw_attribute_keys(appliance: Any) -> list[str]:
@@ -175,9 +204,43 @@ def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
 
 
 def _should_expose_raw_attribute(attribute: str) -> bool:
-    """Return true for raw attributes that are useful as HA entities."""
-    normalized = attribute.lower()
-    return any(keyword in normalized for keyword in RAW_ATTRIBUTE_KEYWORDS)
+    """Return true for raw attributes that identify microwave-like payloads."""
+    tokens = _attribute_tokens(attribute)
+    return any(keyword in tokens for keyword in RAW_ATTRIBUTE_KEYWORDS)
+
+
+def _is_microwave_like(appliance: Any) -> bool:
+    """Return true when a non-cavity appliance looks like a microwave."""
+    info = getattr(appliance, "appliance_info", None)
+    values = (
+        getattr(appliance, "name", ""),
+        getattr(info, "data_model", ""),
+        getattr(info, "category", ""),
+    )
+    if any(
+        "microwave" in str(value).lower() or "mwo" in str(value).lower()
+        for value in values
+    ):
+        return True
+    return any(
+        _should_expose_raw_attribute(attribute)
+        for attribute in _raw_attribute_keys(appliance)
+    )
+
+
+def _find_raw_attribute(
+    appliance: Any,
+    token_groups: tuple[tuple[str, ...], ...],
+    excluded_tokens: tuple[str, ...],
+) -> str | None:
+    """Return the first raw attribute matching all tokens in a group."""
+    for attribute in _raw_attribute_keys(appliance):
+        tokens = _attribute_tokens(attribute)
+        if any(token in tokens for token in excluded_tokens):
+            continue
+        if any(all(token in tokens for token in group) for group in token_groups):
+            return attribute
+    return None
 
 
 def _has_attribute(appliance: Any, attribute: str) -> bool:
@@ -188,15 +251,10 @@ def _has_attribute(appliance: Any, attribute: str) -> bool:
     return bool(has_attribute(attribute))
 
 
-def _slugify_attribute_key(attribute: str) -> str:
-    """Return a Home Assistant-safe key for a raw Whirlpool attribute."""
-    return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", attribute.lower())).strip("_")
-
-
-def _humanize_attribute_key(attribute: str) -> str:
-    """Return a readable name for a raw Whirlpool attribute."""
+def _attribute_tokens(attribute: str) -> set[str]:
+    """Split Whirlpool's raw camel-case attribute names into tokens."""
     spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", attribute.replace("_", " "))
-    return " ".join(spaced.split())
+    return set(re.findall(r"[a-z0-9]+", spaced.lower()))
 
 
 async def async_setup_entry(
