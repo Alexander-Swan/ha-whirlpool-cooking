@@ -16,6 +16,8 @@ MODULES = (
     "custom_components.whirlpool_cooking.coordinator",
     "custom_components.whirlpool_cooking.diagnostics",
     "custom_components.whirlpool_cooking.entity",
+    "custom_components.whirlpool_cooking.fan",
+    "custom_components.whirlpool_cooking.light",
     "custom_components.whirlpool_cooking.sensor",
     "custom_components.whirlpool_cooking.services",
     "custom_components.whirlpool_cooking.switch",

@@ -76,9 +76,9 @@ def test_diagnostics_reads_nested_appliance_info() -> None:
     assert diagnostics["raw_attribute_keys"] == ["CookCycleStatusState"]
 
 
-def test_oven_cavities_get_light_switches(monkeypatch) -> None:
-    """Oven cavity light attributes should create control switches."""
-    from custom_components.whirlpool_cooking.switch import _switch_descriptions
+def test_oven_cavities_get_light_entities(monkeypatch) -> None:
+    """Oven cavity light attributes should create light entities."""
+    from custom_components.whirlpool_cooking.light import _light_descriptions
 
     class Cavity:
         Upper = type("Upper", (), {"name": "Upper"})()
@@ -115,10 +115,43 @@ def test_oven_cavities_get_light_switches(monkeypatch) -> None:
         def get_light(self, cavity) -> bool:
             return cavity is Cavity.Upper
 
-    descriptions = _switch_descriptions(Appliance())
+    descriptions = _light_descriptions(Appliance())
 
     assert [description.key for description in descriptions] == [
         "upper_light",
         "lower_light",
     ]
     assert descriptions[0].value_fn(Appliance()) is True
+
+
+def test_microwave_gets_hood_light_and_fan_entities() -> None:
+    """Microwave hood attributes should create light and fan entities."""
+    from custom_components.whirlpool_cooking.fan import ATTR_HOOD_FAN_SPEED
+    from custom_components.whirlpool_cooking.fan import _speed_value
+    from custom_components.whirlpool_cooking.light import _light_descriptions
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "Hood_OperationSetSurfaceLight": {"value": "1"},
+                "Hood_OperationSetExhaustFanSpeed": {"value": "2"},
+                "Mwo_DisplaySetLightOn": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+    appliance = Appliance()
+    light_descriptions = _light_descriptions(appliance)
+
+    assert [description.key for description in light_descriptions] == [
+        "microwave_light",
+        "hood_light",
+    ]
+    assert light_descriptions[1].value_fn(appliance) is True
+    assert ATTR_HOOD_FAN_SPEED in appliance._data_dict["attributes"]
+    assert _speed_value(appliance) == 2

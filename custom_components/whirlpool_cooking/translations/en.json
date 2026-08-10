@@ -50,9 +50,16 @@
       "upper_stop_cook": { "name": "Upper stop cook" },
       "lower_stop_cook": { "name": "Lower stop cook" }
     },
-    "switch": {
+    "fan": {
+      "hood_fan": { "name": "Hood fan" }
+    },
+    "light": {
       "upper_light": { "name": "Upper light" },
       "lower_light": { "name": "Lower light" },
+      "microwave_light": { "name": "Microwave light" },
+      "hood_light": { "name": "Hood light" }
+    },
+    "switch": {
       "control_lock": { "name": "Control lock" },
       "sabbath_mode": { "name": "Sabbath mode" }
     }

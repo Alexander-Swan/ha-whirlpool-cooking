@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity
-from .sensor import _cavity_exists, _has_attribute
+from .sensor import _has_attribute
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,43 +41,7 @@ async def async_setup_entry(
 
 def _switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescription]:
     """Build switch descriptions supported by an appliance."""
-    return [
-        *_cavity_light_switch_descriptions(appliance),
-        *_global_switch_descriptions(appliance),
-    ]
-
-
-def _cavity_light_switch_descriptions(
-    appliance: Any,
-) -> list[WhirlpoolSwitchDescription]:
-    """Build oven cavity light switches."""
-    from whirlpool.oven import ATTR_POSTFIX_LIGHT_STATUS, CAVITY_PREFIX_MAP, Cavity
-
-    descriptions: list[WhirlpoolSwitchDescription] = []
-    for cavity in (Cavity.Upper, Cavity.Lower):
-        if not _cavity_exists(appliance, cavity):
-            continue
-        if not _has_attribute(
-            appliance,
-            f"{CAVITY_PREFIX_MAP[cavity]}_{ATTR_POSTFIX_LIGHT_STATUS}",
-        ):
-            continue
-
-        cavity_key = cavity.name.lower()
-        descriptions.append(
-            WhirlpoolSwitchDescription(
-                key=f"{cavity_key}_light",
-                translation_key=f"{cavity_key}_light",
-                value_fn=lambda item, oven_cavity=cavity: item.get_light(
-                    oven_cavity,
-                ),
-                set_fn=lambda item, on, oven_cavity=cavity: item.set_light(
-                    on,
-                    oven_cavity,
-                ),
-            ),
-        )
-    return descriptions
+    return _global_switch_descriptions(appliance)
 
 
 def _global_switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescription]:
