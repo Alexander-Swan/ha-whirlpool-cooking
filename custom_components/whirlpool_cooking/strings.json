@@ -46,7 +46,15 @@
       "online": { "name": "Online" }
     },
     "button": {
-      "refresh": { "name": "Refresh" }
+      "refresh": { "name": "Refresh" },
+      "upper_stop_cook": { "name": "Upper stop cook" },
+      "lower_stop_cook": { "name": "Lower stop cook" }
+    },
+    "switch": {
+      "upper_light": { "name": "Upper light" },
+      "lower_light": { "name": "Lower light" },
+      "control_lock": { "name": "Control lock" },
+      "sabbath_mode": { "name": "Sabbath mode" }
     }
   }
 }

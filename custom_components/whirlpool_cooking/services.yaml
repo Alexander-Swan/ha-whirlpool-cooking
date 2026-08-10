@@ -1,0 +1,54 @@
+set_cook:
+  name: Set cook
+  description: Start or update cooking on an oven cavity.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: whirlpool_cooking
+    cavity:
+      required: true
+      selector:
+        select:
+          options:
+            - upper
+            - lower
+    mode:
+      required: true
+      default: bake
+      selector:
+        select:
+          options:
+            - air_fry
+            - bake
+            - broil
+            - convect_bake
+            - convect_broil
+            - convect_roast
+            - keep_warm
+    target_temperature_celsius:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 1
+          unit_of_measurement: "C"
+
+stop_cook:
+  name: Stop cook
+  description: Stop cooking on an oven cavity.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: whirlpool_cooking
+    cavity:
+      required: true
+      selector:
+        select:
+          options:
+            - upper
+            - lower

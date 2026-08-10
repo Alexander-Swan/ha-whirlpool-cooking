@@ -74,3 +74,51 @@ def test_diagnostics_reads_nested_appliance_info() -> None:
 
     assert diagnostics["data_model"] == "ddm_cooking_mhc76_v1"
     assert diagnostics["raw_attribute_keys"] == ["CookCycleStatusState"]
+
+
+def test_oven_cavities_get_light_switches(monkeypatch) -> None:
+    """Oven cavity light attributes should create control switches."""
+    from custom_components.whirlpool_cooking.switch import _switch_descriptions
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    import types
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_LIGHT_STATUS = "DisplaySetLightOn"
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_DisplaySetLightOn": {"value": "1"},
+                "OvenLowerCavity_OpStatusState": {"value": "0"},
+                "OvenLowerCavity_DisplaySetLightOn": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return True
+
+        def get_light(self, cavity) -> bool:
+            return cavity is Cavity.Upper
+
+    descriptions = _switch_descriptions(Appliance())
+
+    assert [description.key for description in descriptions] == [
+        "upper_light",
+        "lower_light",
+    ]
+    assert descriptions[0].value_fn(Appliance()) is True

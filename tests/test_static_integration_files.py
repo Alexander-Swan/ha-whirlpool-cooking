@@ -23,6 +23,14 @@ def test_refresh_button_is_diagnostic() -> None:
     assert "EntityCategory.DIAGNOSTIC" in button_source
 
 
-def test_no_unregistered_services_file() -> None:
-    """The integration should not advertise services it does not register."""
-    assert not (INTEGRATION_PATH / "services.yaml").exists()
+def test_services_file_matches_registered_services() -> None:
+    """The integration should register services advertised in services.yaml."""
+    init_source = (INTEGRATION_PATH / "__init__.py").read_text()
+    services_source = (INTEGRATION_PATH / "services.py").read_text()
+    services_yaml = (INTEGRATION_PATH / "services.yaml").read_text()
+
+    assert "async_setup_services" in init_source
+    assert "SERVICE_SET_COOK" in services_source
+    assert "SERVICE_STOP_COOK" in services_source
+    assert "set_cook:" in services_yaml
+    assert "stop_cook:" in services_yaml

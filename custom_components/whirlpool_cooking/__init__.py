@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import PLATFORMS
 from .coordinator import WhirlpoolCookingCoordinator
+from .services import async_setup_services
 
 type WhirlpoolCookingConfigEntry = ConfigEntry[WhirlpoolCookingCoordinator]
 
@@ -17,6 +18,8 @@ async def async_setup_entry(
     entry: WhirlpoolCookingConfigEntry,
 ) -> bool:
     """Set up Whirlpool Cooking from a config entry."""
+    await async_setup_services(hass)
+
     coordinator = WhirlpoolCookingCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
