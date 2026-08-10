@@ -35,6 +35,22 @@ def cavity_device_name(appliance: Any, cavity: Any | None) -> str | None:
     return cavity_name(cavity)
 
 
+def default_cavity_device_key(appliance: Any) -> str | None:
+    """Return the default child device key for appliance-level oven entities."""
+    cavities = existing_cavities(appliance)
+    if len(cavities) <= 1:
+        return None
+    return cavity_name(cavities[0]).lower()
+
+
+def default_cavity_device_name(appliance: Any) -> str | None:
+    """Return the default child device label for appliance-level oven entities."""
+    cavities = existing_cavities(appliance)
+    if len(cavities) <= 1:
+        return None
+    return cavity_name(cavities[0])
+
+
 def existing_cavities(appliance: Any) -> tuple[Any, ...]:
     """Return the existing oven cavities for an appliance."""
     from whirlpool.oven import Cavity

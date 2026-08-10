@@ -132,6 +132,8 @@ def test_multi_cavity_oven_gets_cavity_device_keys(monkeypatch) -> None:
     from custom_components.whirlpool_cooking.cavity import (
         cavity_device_key,
         cavity_device_name,
+        default_cavity_device_key,
+        default_cavity_device_name,
     )
 
     class Cavity:
@@ -167,6 +169,8 @@ def test_multi_cavity_oven_gets_cavity_device_keys(monkeypatch) -> None:
 
     assert cavity_device_key(appliance, Cavity.Upper) == "upper"
     assert cavity_device_name(appliance, Cavity.Lower) == "Lower"
+    assert default_cavity_device_key(appliance) == "upper"
+    assert default_cavity_device_name(appliance) == "Upper"
 
 
 def test_single_cavity_oven_stays_on_base_device(monkeypatch) -> None:

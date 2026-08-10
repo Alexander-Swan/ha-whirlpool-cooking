@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .cavity import default_cavity_device_key, default_cavity_device_name
 from .const import DOMAIN
 from .coordinator import WhirlpoolCookingCoordinator
 
@@ -29,8 +30,8 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
         super().__init__(coordinator)
         self._appliance = appliance
         self._said = str(_value(appliance, "said", "SAID", default="unknown"))
-        self._device_key = device_key
-        self._device_name = device_name
+        self._device_key = device_key or default_cavity_device_key(appliance)
+        self._device_name = device_name or default_cavity_device_name(appliance)
         self.entity_key = key
         self._attr_unique_id = f"{self.said}_{key}"
 
@@ -58,7 +59,6 @@ class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
                 manufacturer="Whirlpool",
                 name=f"{name} {self._device_name or self._device_key}",
                 model=str(model) if model else None,
-                via_device=(DOMAIN, self.said),
             )
         return DeviceInfo(
             identifiers={(DOMAIN, self.said)},
