@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -13,8 +14,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _has_attribute
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -32,11 +35,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking switches."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingSwitch(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _switch_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingSwitch] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _switch_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking switch entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingSwitch(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 def _switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescription]:
@@ -48,24 +63,67 @@ def _global_switch_descriptions(appliance: Any) -> list[WhirlpoolSwitchDescripti
     """Build appliance-level switches."""
     descriptions: list[WhirlpoolSwitchDescription] = []
     if _has_attribute(appliance, "Sys_OperationSetControlLock"):
-        descriptions.append(
-            WhirlpoolSwitchDescription(
-                key="control_lock",
-                translation_key="control_lock",
-                value_fn=lambda item: item.get_control_locked(),
-                set_fn=lambda item, on: item.set_control_locked(on),
-            ),
-        )
+        if not has_callable(appliance, "get_control_locked") or not has_callable(
+            appliance,
+            "set_control_locked",
+        ):
+            _LOGGER.warning(
+                "Whirlpool appliance %s reports control lock but lacks the required "
+                "control lock API; skipping control lock switch",
+                appliance_label(appliance),
+            )
+        else:
+            descriptions.append(
+                WhirlpoolSwitchDescription(
+                    key="control_lock",
+                    translation_key="control_lock",
+                    value_fn=lambda item: _safe_bool_method(
+                        item,
+                        "get_control_locked",
+                    ),
+                    set_fn=lambda item, on: item.set_control_locked(on),
+                ),
+            )
     if _has_attribute(appliance, "Sys_OperationSetSabbathModeEnabled"):
-        descriptions.append(
-            WhirlpoolSwitchDescription(
-                key="sabbath_mode",
-                translation_key="sabbath_mode",
-                value_fn=lambda item: item.get_sabbath_mode(),
-                set_fn=lambda item, on: item.set_sabbath_mode(on),
-            ),
-        )
+        if not has_callable(appliance, "get_sabbath_mode") or not has_callable(
+            appliance,
+            "set_sabbath_mode",
+        ):
+            _LOGGER.warning(
+                "Whirlpool appliance %s reports Sabbath mode but lacks the required "
+                "Sabbath mode API; skipping Sabbath mode switch",
+                appliance_label(appliance),
+            )
+        else:
+            descriptions.append(
+                WhirlpoolSwitchDescription(
+                    key="sabbath_mode",
+                    translation_key="sabbath_mode",
+                    value_fn=lambda item: _safe_bool_method(
+                        item,
+                        "get_sabbath_mode",
+                    ),
+                    set_fn=lambda item, on: item.set_sabbath_mode(on),
+                ),
+            )
     return descriptions
+
+
+def _safe_bool_method(appliance: Any, method_name: str) -> bool | None:
+    """Read a Whirlpool boolean method without raising into HA."""
+    method = getattr(appliance, method_name, None)
+    if not callable(method):
+        return None
+    try:
+        return method()
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool %s for %s; returning no value",
+            method_name,
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
 
 
 class WhirlpoolCookingSwitch(WhirlpoolCookingEntity, SwitchEntity):
@@ -98,6 +156,10 @@ class WhirlpoolCookingSwitch(WhirlpoolCookingEntity, SwitchEntity):
 
     async def _async_set(self, on: bool) -> None:
         """Set the switch and refresh appliance data."""
-        if not await self.entity_description.set_fn(self.appliance, on):
+        try:
+            result = await self.entity_description.set_fn(self.appliance, on)
+        except Exception as err:
+            raise HomeAssistantError("Whirlpool switch command failed") from err
+        if not result:
             raise HomeAssistantError("Whirlpool rejected the switch command")
         await self.coordinator.async_request_refresh()

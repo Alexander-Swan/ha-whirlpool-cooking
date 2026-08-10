@@ -122,6 +122,9 @@ def test_oven_cavities_get_light_entities(monkeypatch) -> None:
         def get_light(self, cavity) -> bool:
             return cavity is Cavity.Upper
 
+        async def set_light(self, on, cavity) -> bool:
+            return True
+
     descriptions = _light_descriptions(Appliance())
 
     assert [description.key for description in descriptions] == [
@@ -343,8 +346,14 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         def get_oven_cavity_exists(self, cavity) -> bool:
             return True
 
+        def get_cavity_state(self, cavity):
+            return "Idle"
+
         def get_cook_mode(self, cavity):
             return CookMode.Bake
+
+        def get_temp(self, cavity) -> float:
+            return 177
 
         def get_target_temp(self, cavity) -> float:
             return 175
@@ -356,6 +365,15 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
             if cavity is Cavity.Upper:
                 return (CookMode.Bake, CookMode.Broil)
             return (CookMode.Bake, CookMode.ConvectBake, CookMode.KeepWarm)
+
+        async def send_attributes(self, attributes) -> bool:
+            return True
+
+        async def set_cook(self, target_temp, mode, cavity) -> bool:
+            return True
+
+        async def stop_cook(self, cavity) -> bool:
+            return True
 
     appliance = Appliance()
 
@@ -481,6 +499,9 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
         def _get_attribute(self, attribute: str) -> str:
             return self._data_dict["attributes"][attribute]["value"]
 
+        async def send_attributes(self, attributes) -> bool:
+            return True
+
     appliance = Appliance()
     light_descriptions = _light_descriptions(appliance)
 
@@ -547,3 +568,81 @@ def test_start_cook_uses_pending_ha_controls(monkeypatch) -> None:
 
     assert result is True
     assert appliance.sent == (204.4, CookMode.Bake, Cavity.Upper)
+
+
+def test_missing_library_methods_skip_entities_and_log(
+    monkeypatch,
+    caplog,
+) -> None:
+    """Raw attributes without matching library APIs should not create entities."""
+    import logging
+    import types
+
+    from custom_components.whirlpool_cooking.binary_sensor import (
+        _cavity_binary_sensor_descriptions,
+    )
+    from custom_components.whirlpool_cooking.button import _button_descriptions
+    from custom_components.whirlpool_cooking.fan import _hood_fan_supported
+    from custom_components.whirlpool_cooking.light import _light_descriptions
+    from custom_components.whirlpool_cooking.number import _number_descriptions
+    from custom_components.whirlpool_cooking.select import _select_descriptions
+    from custom_components.whirlpool_cooking.sensor import _sensor_descriptions
+    from custom_components.whirlpool_cooking.switch import _switch_descriptions
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_COOK_MODE = "CycleSetCommonMode"
+    oven_module.ATTR_POSTFIX_LIGHT_STATUS = "DisplaySetLightOn"
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.ATTR_POSTFIX_TARGET_TEMP = "CycleSetTargetTemp"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        name = "Kitchen Oven"
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_CycleSetCommonMode": {"value": "2"},
+                "OvenUpperCavity_CycleSetTargetTemp": {"value": "1750"},
+                "OvenUpperCavity_DisplaySetLightOn": {"value": "1"},
+                "OvenUpperCavity_OpStatusDoorLocked": {"value": "0"},
+                "Hood_OperationSetExhaustFanSpeed": {"value": "3"},
+                "Sys_OperationSetControlLock": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return cavity is Cavity.Upper
+
+    appliance = Appliance()
+
+    caplog.set_level(logging.WARNING)
+
+    assert _sensor_descriptions(appliance) == []
+    assert [
+        description.key
+        for description in _cavity_binary_sensor_descriptions(appliance)
+    ] == ["upper_door_locked"]
+    assert _light_descriptions(appliance) == []
+    assert _select_descriptions(appliance) == []
+    assert _number_descriptions(appliance) == []
+    assert [description.key for description in _button_descriptions(appliance)] == [
+        "refresh",
+    ]
+    assert _switch_descriptions(appliance) == []
+    assert _hood_fan_supported(appliance) is False
+    assert "does not expose get_cavity_state" in caplog.text

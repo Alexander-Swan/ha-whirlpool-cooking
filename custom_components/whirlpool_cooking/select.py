@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -21,8 +22,10 @@ from .cooking import (
     supported_cook_mode_options,
 )
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,11 +44,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking selects."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingSelect(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _select_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingSelect] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _select_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking select entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingSelect(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 def _select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
@@ -55,7 +70,14 @@ def _select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
 
 def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
     """Build oven cavity select controls."""
-    from whirlpool.oven import ATTR_POSTFIX_COOK_MODE, Cavity
+    try:
+        from whirlpool.oven import ATTR_POSTFIX_COOK_MODE, Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven select controls",
+            exc_info=True,
+        )
+        return []
 
     descriptions: list[WhirlpoolSelectDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
@@ -65,6 +87,28 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
             attribute,
         ):
             continue
+        if not has_callable(appliance, "get_cook_mode") or not has_callable(
+            appliance,
+            "send_attributes",
+        ):
+            _LOGGER.warning(
+                "Whirlpool appliance %s reports cook mode but lacks the required "
+                "cook mode API; skipping %s cook mode control",
+                appliance_label(appliance),
+                cavity.name.lower(),
+            )
+            continue
+        try:
+            options = supported_cook_mode_options(appliance, cavity)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to read supported Whirlpool cook modes for %s; skipping "
+                "%s cook mode control",
+                appliance_label(appliance),
+                cavity.name.lower(),
+                exc_info=True,
+            )
+            continue
 
         cavity_key = cavity.name.lower()
         descriptions.append(
@@ -72,9 +116,10 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
                 key=f"{cavity_key}_cook_mode_control",
                 translation_key=f"{cavity_key}_cook_mode_control",
                 cavity=cavity,
-                options=supported_cook_mode_options(appliance, cavity),
-                current_fn=lambda item, oven_cavity=cavity: cook_mode_option(
-                    item.get_cook_mode(oven_cavity),
+                options=options,
+                current_fn=lambda item, oven_cavity=cavity: _current_cook_mode(
+                    item,
+                    oven_cavity,
                 ),
                 select_fn=lambda item, option, attr=attribute: _send_cook_mode(
                     item,
@@ -84,6 +129,19 @@ def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescripti
             ),
         )
     return descriptions
+
+
+def _current_cook_mode(appliance: Any, cavity: Any) -> str | None:
+    """Return the current Whirlpool cook mode without raising into HA."""
+    try:
+        return cook_mode_option(appliance.get_cook_mode(cavity))
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool cook mode for %s; returning no value",
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
 
 
 async def _send_cook_mode(appliance: Any, attribute: str, option: str) -> bool:

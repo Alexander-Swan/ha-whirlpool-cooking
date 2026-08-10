@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -11,8 +12,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _has_attribute, _raw_attribute_value
+
+_LOGGER = logging.getLogger(__name__)
 
 ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
 HOOD_FAN_MAX_SPEED = 6
@@ -30,11 +33,34 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking fans."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingHoodFan(coordinator, appliance)
-        for appliance in coordinator.data
-        if _has_attribute(appliance, ATTR_HOOD_FAN_SPEED)
-    )
+    entities: list[WhirlpoolCookingHoodFan] = []
+    for appliance in coordinator.data:
+        try:
+            if not _hood_fan_supported(appliance):
+                continue
+            entities.append(WhirlpoolCookingHoodFan(coordinator, appliance))
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking fan entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+    async_add_entities(entities)
+
+
+def _hood_fan_supported(appliance: Any) -> bool:
+    """Return true when a hood fan entity can be read and controlled."""
+    if not _has_attribute(appliance, ATTR_HOOD_FAN_SPEED):
+        return False
+    if not has_callable(appliance, "send_attributes"):
+        _LOGGER.warning(
+            "Whirlpool appliance %s reports hood fan speed but does not "
+            "expose send_attributes; skipping hood fan",
+            appliance_label(appliance),
+        )
+        return False
+    return True
 
 
 class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):

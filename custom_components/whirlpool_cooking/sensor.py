@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -25,12 +26,19 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .cavity import cavity_device_key, cavity_device_name, has_attribute
+from .cavity import (
+    cavity_device_key,
+    cavity_device_name,
+    existing_cavities,
+    has_attribute,
+)
 from .cavity import cavity_exists as _cavity_exists
 from .cooking import cavity_attribute, enum_label
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .temperature import configured_temperature_unit, temperature_from_celsius
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -184,63 +192,111 @@ def _cavity_sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescripti
             continue
 
         cavity_key = cavity.name.lower()
-        descriptions.extend(
-            (
+        if has_callable(appliance, "get_cavity_state"):
+            descriptions.append(
                 WhirlpoolSensorDescription(
                     key=f"{cavity_key}_state",
                     translation_key=f"{cavity_key}_state",
                     cavity=cavity,
-                    value_fn=lambda item, oven_cavity=cavity: _enum_name(
-                        item.get_cavity_state(oven_cavity),
+                    value_fn=lambda item, oven_cavity=cavity: _safe_cavity_value(
+                        item,
+                        "get_cavity_state",
+                        oven_cavity,
+                        transform=_enum_name,
                     ),
                 ),
+            )
+        else:
+            _log_missing_method(appliance, "get_cavity_state", f"{cavity_key}_state")
+
+        if has_callable(appliance, "get_cook_mode"):
+            descriptions.append(
                 WhirlpoolSensorDescription(
                     key=f"{cavity_key}_mode",
                     translation_key=f"{cavity_key}_mode",
                     cavity=cavity,
-                    value_fn=lambda item, oven_cavity=cavity: _enum_name(
-                        item.get_cook_mode(oven_cavity),
+                    value_fn=lambda item, oven_cavity=cavity: _safe_cavity_value(
+                        item,
+                        "get_cook_mode",
+                        oven_cavity,
+                        transform=_enum_name,
                     ),
                 ),
+            )
+        else:
+            _log_missing_method(appliance, "get_cook_mode", f"{cavity_key}_mode")
+
+        if has_callable(appliance, "get_temp"):
+            descriptions.append(
                 WhirlpoolSensorDescription(
                     key=f"{cavity_key}_temperature",
                     translation_key=f"{cavity_key}_temperature",
                     cavity=cavity,
                     device_class=SensorDeviceClass.TEMPERATURE,
                     native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-                    value_fn=lambda item, oven_cavity=cavity: item.get_temp(
+                    value_fn=lambda item, oven_cavity=cavity: _safe_cavity_value(
+                        item,
+                        "get_temp",
                         oven_cavity,
                     ),
                 ),
+            )
+        else:
+            _log_missing_method(appliance, "get_temp", f"{cavity_key}_temperature")
+
+        if has_callable(appliance, "get_target_temp"):
+            descriptions.append(
                 WhirlpoolSensorDescription(
                     key=f"{cavity_key}_target_temperature",
                     translation_key=f"{cavity_key}_target_temperature",
                     cavity=cavity,
                     device_class=SensorDeviceClass.TEMPERATURE,
                     native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-                    value_fn=lambda item, oven_cavity=cavity: item.get_target_temp(
-                        oven_cavity,
-                    ),
-                ),
-                WhirlpoolSensorDescription(
-                    key=f"{cavity_key}_cook_time",
-                    translation_key=f"{cavity_key}_cook_time",
-                    cavity=cavity,
-                    value_fn=lambda item, oven_cavity=cavity: _oven_cook_time(
+                    value_fn=lambda item, oven_cavity=cavity: _safe_cavity_value(
                         item,
+                        "get_target_temp",
                         oven_cavity,
                     ),
                 ),
-                WhirlpoolSensorDescription(
-                    key=f"{cavity_key}_cook_time_remaining",
-                    translation_key=f"{cavity_key}_cook_time_remaining",
-                    cavity=cavity,
-                    value_fn=lambda item, oven_cavity=cavity: _formatted_cavity_time(
-                        item,
-                        oven_cavity,
-                        "TimeStatusCookTimeRemaining",
+            )
+        else:
+            _log_missing_method(
+                appliance,
+                "get_target_temp",
+                f"{cavity_key}_target_temperature",
+            )
+
+        if has_callable(appliance, "get_cook_time") or _has_attribute(
+            appliance,
+            cavity_attribute(cavity, "TimeSetCookTimeSet"),
+        ):
+            descriptions.extend(
+                (
+                    WhirlpoolSensorDescription(
+                        key=f"{cavity_key}_cook_time",
+                        translation_key=f"{cavity_key}_cook_time",
+                        cavity=cavity,
+                        value_fn=lambda item, oven_cavity=cavity: _oven_cook_time(
+                            item,
+                            oven_cavity,
+                        ),
+                    ),
+                    WhirlpoolSensorDescription(
+                        key=f"{cavity_key}_cook_time_remaining",
+                        translation_key=f"{cavity_key}_cook_time_remaining",
+                        cavity=cavity,
+                        value_fn=lambda item, oven_cavity=cavity: (
+                            _formatted_cavity_time(
+                                item,
+                                oven_cavity,
+                                "TimeStatusCookTimeRemaining",
+                            )
+                        ),
                     ),
                 ),
+            )
+        descriptions.extend(
+            (
                 WhirlpoolSensorDescription(
                     key=f"{cavity_key}_delay_time_remaining",
                     translation_key=f"{cavity_key}_delay_time_remaining",
@@ -296,7 +352,7 @@ def _sensor_descriptions(appliance: Any) -> list[WhirlpoolSensorDescription]:
     """Build all sensor descriptions for an appliance."""
     global_descriptions = _global_sensor_descriptions(appliance)
     cavity_descriptions = _cavity_sensor_descriptions(appliance)
-    if cavity_descriptions:
+    if cavity_descriptions or existing_cavities(appliance):
         return [*SENSORS, *global_descriptions, *cavity_descriptions]
     return [*SENSORS, *global_descriptions, *_microwave_sensor_descriptions(appliance)]
 
@@ -386,7 +442,15 @@ def _raw_attribute_keys(appliance: Any) -> list[str]:
 
 def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
     """Return a raw Whirlpool attribute value."""
-    value = getattr(appliance, "_get_attribute", lambda _: None)(attribute)
+    try:
+        value = getattr(appliance, "_get_attribute", lambda _: None)(attribute)
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool attribute %s; returning no value",
+            attribute,
+            exc_info=True,
+        )
+        return None
     if value == "":
         return None
     return value
@@ -414,7 +478,11 @@ def _oven_cook_time(appliance: Any, cavity: Any) -> str | None:
     )
     if configured is not None:
         return _format_duration_seconds(configured)
-    return _format_duration_seconds(appliance.get_cook_time(cavity))
+    if not has_callable(appliance, "get_cook_time"):
+        return None
+    return _format_duration_seconds(
+        _safe_cavity_value(appliance, "get_cook_time", cavity),
+    )
 
 
 def _formatted_cavity_time(appliance: Any, cavity: Any, postfix: str) -> str | None:
@@ -567,11 +635,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking sensors."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingSensor(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _sensor_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingSensor] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _sensor_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking sensor entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingSensor(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 class WhirlpoolCookingSensor(WhirlpoolCookingEntity, SensorEntity):
@@ -609,3 +689,37 @@ class WhirlpoolCookingSensor(WhirlpoolCookingEntity, SensorEntity):
         if self.entity_description.device_class == SensorDeviceClass.TEMPERATURE:
             return configured_temperature_unit(self.coordinator.config_entry)
         return self.entity_description.native_unit_of_measurement
+
+
+def _safe_cavity_value(
+    appliance: Any,
+    method_name: str,
+    cavity: Any,
+    *,
+    transform: Callable[[Any], Any] | None = None,
+) -> Any:
+    """Read a Whirlpool cavity method without raising into Home Assistant."""
+    method = getattr(appliance, method_name, None)
+    if not callable(method):
+        return None
+    try:
+        value = method(cavity)
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool %s for %s; returning no value",
+            method_name,
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
+    return transform(value) if transform is not None else value
+
+
+def _log_missing_method(appliance: Any, method_name: str, entity_key: str) -> None:
+    """Log a skipped entity caused by a missing Whirlpool library method."""
+    _LOGGER.warning(
+        "Whirlpool appliance %s does not expose %s; skipping %s",
+        appliance_label(appliance),
+        method_name,
+        entity_key,
+    )

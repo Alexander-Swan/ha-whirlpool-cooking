@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.core import callback
@@ -11,6 +12,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .cavity import default_cavity_device_key, default_cavity_device_name
 from .const import DOMAIN
 from .coordinator import WhirlpoolCookingCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class WhirlpoolCookingEntity(CoordinatorEntity[WhirlpoolCookingCoordinator]):
@@ -135,5 +138,22 @@ def _value(source: Any, *names: str, default: Any = None) -> Any:
                     return value()
                 except TypeError:
                     return default
+                except Exception:
+                    _LOGGER.warning(
+                        "Unable to read Whirlpool value %s; using default",
+                        name,
+                        exc_info=True,
+                    )
+                    return default
             return value
     return default
+
+
+def appliance_label(appliance: Any) -> str:
+    """Return a safe appliance label for logs."""
+    return str(_value(appliance, "name", "appliance_name", "said", default="unknown"))
+
+
+def has_callable(appliance: Any, name: str) -> bool:
+    """Return true if an appliance exposes a callable API method."""
+    return callable(getattr(appliance, name, None))

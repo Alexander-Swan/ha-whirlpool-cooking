@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def cavity_exists(appliance: Any, cavity: Any) -> bool:
     """Return true when the Whirlpool API reports that an oven cavity exists."""
-    from whirlpool.oven import ATTR_POSTFIX_STATUS_STATE, CAVITY_PREFIX_MAP
+    try:
+        from whirlpool.oven import ATTR_POSTFIX_STATUS_STATE, CAVITY_PREFIX_MAP
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven cavity entities",
+            exc_info=True,
+        )
+        return False
 
     if not has_attribute(
         appliance,
@@ -17,8 +27,19 @@ def cavity_exists(appliance: Any, cavity: Any) -> bool:
 
     exists = getattr(appliance, "get_oven_cavity_exists", None)
     if exists is None:
+        _LOGGER.warning(
+            "Whirlpool appliance does not expose get_oven_cavity_exists; "
+            "skipping oven cavity entities",
+        )
         return False
-    return bool(exists(cavity))
+    try:
+        return bool(exists(cavity))
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool oven cavity availability; skipping cavity",
+            exc_info=True,
+        )
+        return False
 
 
 def cavity_device_key(appliance: Any, cavity: Any | None) -> str | None:
@@ -53,7 +74,14 @@ def default_cavity_device_name(appliance: Any) -> str | None:
 
 def existing_cavities(appliance: Any) -> tuple[Any, ...]:
     """Return the existing oven cavities for an appliance."""
-    from whirlpool.oven import Cavity
+    try:
+        from whirlpool.oven import Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; no oven cavity devices created",
+            exc_info=True,
+        )
+        return ()
 
     return tuple(
         cavity
@@ -72,4 +100,12 @@ def has_attribute(appliance: Any, attribute: str) -> bool:
     has_attribute_fn = getattr(appliance, "has_attribute", None)
     if has_attribute_fn is None:
         return False
-    return bool(has_attribute_fn(attribute))
+    try:
+        return bool(has_attribute_fn(attribute))
+    except Exception:
+        _LOGGER.warning(
+            "Unable to check Whirlpool attribute %s; treating it as unavailable",
+            attribute,
+            exc_info=True,
+        )
+        return False

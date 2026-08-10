@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,8 +19,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .cavity import cavity_device_key, cavity_device_name
 from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity, _value
+from .entity import WhirlpoolCookingEntity, _value, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,7 +47,14 @@ def _cavity_binary_sensor_descriptions(
     appliance: Any,
 ) -> list[WhirlpoolBinarySensorDescription]:
     """Build binary sensor descriptions for oven cavities that exist."""
-    from whirlpool.oven import Cavity
+    try:
+        from whirlpool.oven import Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven binary sensors",
+            exc_info=True,
+        )
+        return []
 
     descriptions: list[WhirlpoolBinarySensorDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
@@ -52,17 +62,33 @@ def _cavity_binary_sensor_descriptions(
             continue
 
         cavity_key = cavity.name.lower()
-        descriptions.extend(
-            (
+        if has_callable(appliance, "get_door_opened"):
+            descriptions.append(
                 WhirlpoolBinarySensorDescription(
                     key=f"{cavity_key}_door",
                     translation_key=f"{cavity_key}_door",
                     cavity=cavity,
                     device_class=BinarySensorDeviceClass.DOOR,
-                    value_fn=lambda item, oven_cavity=cavity: _as_bool(
-                        item.get_door_opened(oven_cavity),
+                    value_fn=lambda item, oven_cavity=cavity: _as_bool_cavity_method(
+                        item,
+                        "get_door_opened",
+                        oven_cavity,
                     ),
                 ),
+            )
+        else:
+            _LOGGER.warning(
+                "Whirlpool appliance %s does not expose get_door_opened; "
+                "skipping %s_door",
+                appliance_label(appliance),
+                cavity_key,
+            )
+
+        if _has_attribute(
+            appliance,
+            cavity_attribute(cavity, "OpStatusDoorLocked"),
+        ):
+            descriptions.append(
                 WhirlpoolBinarySensorDescription(
                     key=f"{cavity_key}_door_locked",
                     translation_key=f"{cavity_key}_door_locked",
@@ -75,17 +101,8 @@ def _cavity_binary_sensor_descriptions(
                         ),
                     ),
                 ),
-            ),
-        )
-    return [
-        description
-        for description in descriptions
-        if not description.key.endswith("_door_locked")
-        or _has_attribute(
-            appliance,
-            cavity_attribute(description.cavity, "OpStatusDoorLocked"),
-        )
-    ]
+            )
+    return descriptions
 
 
 async def async_setup_entry(
@@ -95,14 +112,26 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking binary sensors."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingBinarySensor(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in (
-            *BINARY_SENSORS,
-            *_cavity_binary_sensor_descriptions(appliance),
+    entities: list[WhirlpoolCookingBinarySensor] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = (
+                *BINARY_SENSORS,
+                *_cavity_binary_sensor_descriptions(appliance),
+            )
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking binary sensor entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingBinarySensor(coordinator, appliance, description)
+            for description in descriptions
         )
-    )
+    async_add_entities(entities)
 
 
 class WhirlpoolCookingBinarySensor(WhirlpoolCookingEntity, BinarySensorEntity):
@@ -141,3 +170,24 @@ def _as_bool(value: Any) -> bool | None:
     if isinstance(value, str):
         return value.lower() in {"1", "true", "yes", "on", "open", "online"}
     return bool(value)
+
+
+def _as_bool_cavity_method(
+    appliance: Any,
+    method_name: str,
+    cavity: Any,
+) -> bool | None:
+    """Read a Whirlpool boolean cavity method without raising into Home Assistant."""
+    method = getattr(appliance, method_name, None)
+    if not callable(method):
+        return None
+    try:
+        return _as_bool(method(cavity))
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool %s for %s; returning no value",
+            method_name,
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None

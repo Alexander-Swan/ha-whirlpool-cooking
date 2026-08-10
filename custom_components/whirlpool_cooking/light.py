@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -19,8 +20,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
+
+_LOGGER = logging.getLogger(__name__)
 
 ATTR_HOOD_SURFACE_LIGHT = "Hood_OperationSetSurfaceLight"
 ATTR_MICROWAVE_LIGHT = "Mwo_DisplaySetLightOn"
@@ -46,11 +49,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking lights."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingLight(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _light_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingLight] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _light_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking light entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingLight(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 def _light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription]:
@@ -76,6 +91,13 @@ def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription
             attribute,
         ):
             continue
+        if not has_callable(appliance, "set_light"):
+            _LOGGER.warning(
+                "Whirlpool appliance %s does not expose set_light; skipping %s light",
+                appliance_label(appliance),
+                cavity.name.lower(),
+            )
+            continue
 
         cavity_key = cavity.name.lower()
         descriptions.append(
@@ -98,6 +120,9 @@ def _microwave_light_descriptions(
 ) -> list[WhirlpoolLightDescription]:
     """Build microwave and hood light descriptions."""
     descriptions: list[WhirlpoolLightDescription] = []
+    if not has_callable(appliance, "send_attributes"):
+        return descriptions
+
     if _has_attribute(appliance, ATTR_MICROWAVE_LIGHT):
         descriptions.append(
             WhirlpoolLightDescription(

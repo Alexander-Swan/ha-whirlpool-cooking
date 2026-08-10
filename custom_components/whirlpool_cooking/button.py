@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -21,8 +22,10 @@ from .cooking import (
     get_pending_target_temperature,
 )
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,11 +53,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking buttons."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingButton(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _button_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingButton] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _button_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking button entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingButton(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 def _button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
@@ -64,7 +79,14 @@ def _button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
 
 def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
     """Build oven cavity command buttons."""
-    from whirlpool.oven import Cavity
+    try:
+        from whirlpool.oven import Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven command buttons",
+            exc_info=True,
+        )
+        return []
 
     descriptions: list[WhirlpoolButtonDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
@@ -72,32 +94,51 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
             continue
 
         cavity_key = cavity.name.lower()
-        descriptions.append(
-            WhirlpoolButtonDescription(
-                key=f"{cavity_key}_start_cook",
-                translation_key=f"{cavity_key}_start_cook",
-                cavity=cavity,
-                press_fn=(
-                    lambda item, coordinator, oven_cavity=cavity: _async_start_cook(
-                        item,
-                        coordinator,
-                        oven_cavity,
-                    )
+        if has_callable(appliance, "set_cook"):
+            descriptions.append(
+                WhirlpoolButtonDescription(
+                    key=f"{cavity_key}_start_cook",
+                    translation_key=f"{cavity_key}_start_cook",
+                    cavity=cavity,
+                    press_fn=(
+                        lambda item, coordinator, oven_cavity=cavity: _async_start_cook(
+                            item,
+                            coordinator,
+                            oven_cavity,
+                        )
+                    ),
                 ),
-            ),
-        )
-        descriptions.append(
-            WhirlpoolButtonDescription(
-                key=f"{cavity_key}_stop_cook",
-                translation_key=f"{cavity_key}_stop_cook",
-                cavity=cavity,
-                press_fn=lambda item, coordinator, oven_cavity=cavity: _async_stop_cook(
-                    item,
-                    coordinator,
-                    oven_cavity,
+            )
+        else:
+            _LOGGER.warning(
+                "Whirlpool appliance %s does not expose set_cook; "
+                "skipping %s start cook",
+                appliance_label(appliance),
+                cavity_key,
+            )
+
+        if has_callable(appliance, "stop_cook"):
+            descriptions.append(
+                WhirlpoolButtonDescription(
+                    key=f"{cavity_key}_stop_cook",
+                    translation_key=f"{cavity_key}_stop_cook",
+                    cavity=cavity,
+                    press_fn=lambda item, coordinator, oven_cavity=cavity: (
+                        _async_stop_cook(
+                            item,
+                            coordinator,
+                            oven_cavity,
+                        )
+                    ),
                 ),
-            ),
-        )
+            )
+        else:
+            _LOGGER.warning(
+                "Whirlpool appliance %s does not expose stop_cook; "
+                "skipping %s stop cook",
+                appliance_label(appliance),
+                cavity_key,
+            )
     return descriptions
 
 
@@ -112,7 +153,10 @@ async def _async_stop_cook(
     cavity: Any,
 ) -> bool:
     """Stop cooking on an oven cavity."""
-    result = await appliance.stop_cook(cavity)
+    try:
+        result = await appliance.stop_cook(cavity)
+    except Exception as err:
+        raise HomeAssistantError("Whirlpool stop cook command failed") from err
     if result:
         await coordinator.async_request_refresh()
     return result
@@ -126,22 +170,56 @@ async def _async_start_cook(
     """Start cooking on an oven cavity using current mode and target temp."""
     mode_option = (
         get_pending_cook_mode_option(appliance, cavity)
-        or cook_mode_option(appliance.get_cook_mode(cavity))
+        or _current_cook_mode_option(appliance, cavity)
         or "Bake"
     )
     target_temp = (
         get_pending_target_temperature(appliance, cavity)
-        or appliance.get_target_temp(cavity)
+        or _current_target_temperature(appliance, cavity)
         or 175
     )
-    result = await appliance.set_cook(
-        target_temp,
-        cook_mode_from_option(mode_option),
-        cavity,
-    )
+    try:
+        result = await appliance.set_cook(
+            target_temp,
+            cook_mode_from_option(mode_option),
+            cavity,
+        )
+    except Exception as err:
+        raise HomeAssistantError("Whirlpool start cook command failed") from err
     if result:
         await coordinator.async_request_refresh()
     return result
+
+
+def _current_cook_mode_option(appliance: Any, cavity: Any) -> str | None:
+    """Return the current cook mode option without raising into HA."""
+    if not has_callable(appliance, "get_cook_mode"):
+        return None
+    try:
+        return cook_mode_option(appliance.get_cook_mode(cavity))
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool cook mode for %s; using default for start cook",
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
+
+
+def _current_target_temperature(appliance: Any, cavity: Any) -> float | None:
+    """Return the current target temperature without raising into HA."""
+    if not has_callable(appliance, "get_target_temp"):
+        return None
+    try:
+        return appliance.get_target_temp(cavity)
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool target temperature for %s; using default "
+            "for start cook",
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
 
 
 class WhirlpoolCookingButton(WhirlpoolCookingEntity, ButtonEntity):

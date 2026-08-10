@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -16,13 +17,15 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .cavity import cavity_device_key, cavity_device_name
 from .cooking import cavity_attribute, set_pending_target_temperature
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute
 from .temperature import (
     configured_temperature_unit,
     temperature_from_celsius,
     temperature_to_celsius,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,11 +44,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up Whirlpool Cooking numbers."""
     coordinator: WhirlpoolCookingCoordinator = entry.runtime_data
-    async_add_entities(
-        WhirlpoolCookingNumber(coordinator, appliance, description)
-        for appliance in coordinator.data
-        for description in _number_descriptions(appliance)
-    )
+    entities: list[WhirlpoolCookingNumber] = []
+    for appliance in coordinator.data:
+        try:
+            descriptions = _number_descriptions(appliance)
+        except Exception:
+            _LOGGER.warning(
+                "Unable to build Whirlpool Cooking number entities for %s; "
+                "skipping this appliance",
+                appliance_label(appliance),
+                exc_info=True,
+            )
+            continue
+        entities.extend(
+            WhirlpoolCookingNumber(coordinator, appliance, description)
+            for description in descriptions
+        )
+    async_add_entities(entities)
 
 
 def _number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescription]:
@@ -55,7 +70,14 @@ def _number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescription]:
 
 def _cavity_number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescription]:
     """Build oven cavity number controls."""
-    from whirlpool.oven import ATTR_POSTFIX_TARGET_TEMP, Cavity
+    try:
+        from whirlpool.oven import ATTR_POSTFIX_TARGET_TEMP, Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven number controls",
+            exc_info=True,
+        )
+        return []
 
     descriptions: list[WhirlpoolNumberDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
@@ -64,6 +86,18 @@ def _cavity_number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescripti
             appliance,
             attribute,
         ):
+            continue
+        if not has_callable(appliance, "get_target_temp") or not has_callable(
+            appliance,
+            "send_attributes",
+        ):
+            _LOGGER.warning(
+                "Whirlpool appliance %s reports target temperature but lacks "
+                "the required target temperature API; skipping %s target "
+                "temperature control",
+                appliance_label(appliance),
+                cavity.name.lower(),
+            )
             continue
 
         cavity_key = cavity.name.lower()
@@ -92,7 +126,15 @@ def _cavity_number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescripti
 
 def _target_temperature(appliance: Any, cavity: Any) -> float | None:
     """Return the target temperature for a cavity."""
-    value = appliance.get_target_temp(cavity)
+    try:
+        value = appliance.get_target_temp(cavity)
+    except Exception:
+        _LOGGER.warning(
+            "Unable to read Whirlpool target temperature for %s; returning no value",
+            appliance_label(appliance),
+            exc_info=True,
+        )
+        return None
     if value is None:
         return None
     try:
