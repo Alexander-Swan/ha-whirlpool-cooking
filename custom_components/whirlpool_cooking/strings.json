@@ -112,7 +112,8 @@
     },
     "select": {
       "upper_cook_mode_control": { "name": "Upper cook mode" },
-      "lower_cook_mode_control": { "name": "Lower cook mode" }
+      "lower_cook_mode_control": { "name": "Lower cook mode" },
+      "hood_fan_mode": { "name": "Hood fan mode" }
     },
     "switch": {
       "control_lock": { "name": "Control lock" },

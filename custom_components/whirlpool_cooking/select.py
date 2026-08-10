@@ -24,9 +24,13 @@ from .cooking import (
 )
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
+from .fan import ATTR_HOOD_FAN_SPEED, PRESET_MODE_TO_SPEED, SPEED_TO_PRESET_MODE
 from .sensor import _cavity_exists, _has_attribute
 
 _LOGGER = logging.getLogger(__name__)
+
+HOOD_FAN_OFF = "Off"
+HOOD_FAN_MODE_OPTIONS = [HOOD_FAN_OFF, *PRESET_MODE_TO_SPEED]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -66,7 +70,32 @@ async def async_setup_entry(
 
 def _select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
     """Build select descriptions supported by an appliance."""
-    return _cavity_select_descriptions(appliance)
+    return [
+        *_cavity_select_descriptions(appliance),
+        *_hood_fan_select_descriptions(appliance),
+    ]
+
+
+def _hood_fan_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
+    """Build microwave hood fan mode controls."""
+    if not _has_attribute(appliance, ATTR_HOOD_FAN_SPEED):
+        return []
+    if not has_callable(appliance, "send_attributes"):
+        _LOGGER.debug(
+            "Whirlpool appliance %s reports hood fan speed but does not "
+            "expose send_attributes; skipping hood fan mode select",
+            appliance_label(appliance),
+        )
+        return []
+    return [
+        WhirlpoolSelectDescription(
+            key="hood_fan_mode",
+            translation_key="hood_fan_mode",
+            options=HOOD_FAN_MODE_OPTIONS,
+            current_fn=_current_hood_fan_mode,
+            select_fn=_send_hood_fan_mode,
+        ),
+    ]
 
 
 def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
@@ -175,6 +204,40 @@ async def _send_cook_mode(appliance: Any, attribute: str, option: str) -> bool:
     )
 
 
+def _current_hood_fan_mode(appliance: Any) -> str | None:
+    """Return the current hood fan mode."""
+    speed = _hood_fan_speed(appliance)
+    if speed is None:
+        return None
+    if speed <= 0:
+        return HOOD_FAN_OFF
+    return SPEED_TO_PRESET_MODE.get(speed)
+
+
+async def _send_hood_fan_mode(appliance: Any, option: str) -> bool:
+    """Send a Whirlpool hood fan mode."""
+    if option == HOOD_FAN_OFF:
+        speed = "0"
+    else:
+        speed = PRESET_MODE_TO_SPEED.get(option)
+    if speed is None:
+        raise HomeAssistantError(f"Unsupported Whirlpool fan mode: {option}")
+    return await appliance.send_attributes({ATTR_HOOD_FAN_SPEED: speed})
+
+
+def _hood_fan_speed(appliance: Any) -> int | None:
+    """Return raw hood fan speed as an integer."""
+    from .sensor import _raw_attribute_value
+
+    value = _raw_attribute_value(appliance, ATTR_HOOD_FAN_SPEED)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
     """Whirlpool Cooking select."""
 
@@ -203,7 +266,11 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Select an option."""
-        normalized_option = cook_mode_option_from_alias(option)
+        normalized_option = (
+            cook_mode_option_from_alias(option)
+            if self.entity_description.cavity is not None
+            else option
+        )
         if normalized_option not in self.entity_description.options:
             raise HomeAssistantError(f"Unsupported Whirlpool option: {option}")
         if not await self.entity_description.select_fn(

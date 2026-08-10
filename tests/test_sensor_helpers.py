@@ -536,6 +536,8 @@ def test_cook_mode_select_defaults_to_bake_when_current_mode_is_unknown(
 
 def test_microwave_gets_hood_light_and_fan_entities() -> None:
     """Microwave hood attributes should create light and fan entities."""
+    import asyncio
+
     from custom_components.whirlpool_cooking.fan import (
         ATTR_HOOD_FAN_SPEED,
         PRESET_MODE_TO_SPEED,
@@ -548,8 +550,10 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
         _level_for_brightness,
         _light_descriptions,
     )
+    from custom_components.whirlpool_cooking.select import _select_descriptions
 
     class Appliance:
+        sent = None
         _data_dict = {
             "attributes": {
                 "Hood_OperationSetSurfaceLight": {"value": "2"},
@@ -565,15 +569,30 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
             return self._data_dict["attributes"][attribute]["value"]
 
         async def send_attributes(self, attributes) -> bool:
+            self.sent = attributes
             return True
 
     appliance = Appliance()
     light_descriptions = _light_descriptions(appliance)
+    select_descriptions = _select_descriptions(appliance)
 
     assert [description.key for description in light_descriptions] == [
         "microwave_light",
         "hood_light",
     ]
+    assert [description.key for description in select_descriptions] == [
+        "hood_fan_mode",
+    ]
+    assert select_descriptions[0].options == [
+        "Off",
+        "Speed 1",
+        "Speed 2",
+        "Speed 3",
+        "Speed 4",
+        "Speed 5",
+        "Speed 6",
+    ]
+    assert select_descriptions[0].current_fn(appliance) == "Speed 4"
     assert light_descriptions[1].value_fn(appliance) is True
     assert light_descriptions[1].brightness_fn(appliance) == 255
     assert _brightness_for_level(1, 2) == 128
@@ -585,6 +604,11 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert PRESET_MODE_TO_SPEED["Speed 4"] == "4"
     assert _speed_for_percentage(50) == "3"
     assert _speed_for_percentage(100) == "6"
+
+    asyncio.run(select_descriptions[0].select_fn(appliance, "Speed 2"))
+    assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "2"}
+    asyncio.run(select_descriptions[0].select_fn(appliance, "Off"))
+    assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "0"}
 
 
 def test_start_cook_uses_pending_ha_controls(monkeypatch) -> None:
