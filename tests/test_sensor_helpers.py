@@ -609,12 +609,17 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert _speed_value(appliance) == 4
     assert SPEED_TO_PRESET_MODE[4] == "Medium"
     assert PRESET_MODE_TO_SPEED["Low"] == "2"
-    assert PRESET_MODE_TO_SPEED["Medium-high"] == "3"
+    assert PRESET_MODE_TO_SPEED["Medium-high"] == "5"
+    assert PRESET_MODE_TO_SPEED["High"] == "6"
     assert _speed_for_percentage(50) == "4"
-    assert _speed_for_percentage(100) == "1"
+    assert _speed_for_percentage(100) == "6"
 
     asyncio.run(select_descriptions[0].select_fn(appliance, "Medium"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "4"}
+    asyncio.run(select_descriptions[0].select_fn(appliance, "Medium-high"))
+    assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "5"}
+    asyncio.run(select_descriptions[0].select_fn(appliance, "High"))
+    assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "6"}
     asyncio.run(select_descriptions[0].select_fn(appliance, "Off"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "0"}
 

@@ -271,13 +271,20 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
+        current_option = self.entity_description.current_fn(self.appliance)
         if (
             self._optimistic_option in self.entity_description.options
             and time.monotonic() < self._optimistic_option_until
         ):
+            if (
+                current_option in self.entity_description.options
+                and current_option != self._optimistic_option
+            ):
+                self._optimistic_option = None
+                return current_option
             return self._optimistic_option
         self._optimistic_option = None
-        return self.entity_description.current_fn(self.appliance)
+        return current_option
 
     async def async_select_option(self, option: str) -> None:
         """Select an option."""

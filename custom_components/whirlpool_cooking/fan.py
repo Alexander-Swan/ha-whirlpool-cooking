@@ -21,10 +21,10 @@ ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
 HOOD_FAN_MAX_SPEED = 4
 
 SPEED_TO_PRESET_MODE = {
-    1: "High",
     2: "Low",
-    3: "Medium-high",
     4: "Medium",
+    5: "Medium-high",
+    6: "High",
 }
 PRESET_MODE_TO_SPEED = {
     preset_mode: str(speed)
