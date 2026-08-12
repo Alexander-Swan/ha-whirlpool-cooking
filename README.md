@@ -19,7 +19,7 @@ This project is an early test integration. The current implementation supports:
 - push-style attribute updates when the library connection is available, with a
   polling fallback if push setup fails
 - oven cavity devices and entities for state, temperature, door, light, cook
-  mode, target temperature, and cook start/stop controls
+  mode, target temperature, cook duration, and cook start/stop controls
 - kitchen timer duration, start, and cancel controls when timer operation
   attributes are reported by the appliance
 - microwave sensors plus hood light, microwave light, and multi-speed hood fan
@@ -82,7 +82,7 @@ stay on the main appliance device.
 | `select` | Cook mode | Selects a supported cook mode for the cavity. Options are filtered from appliance capability data when available. |
 | `number` | Target temperature | Sets the pending target temperature for the cavity in the configured display unit. |
 | `text` | Cook duration | Sets a timed-cook duration after the oven has preheated. Accepts seconds, `M:SS`, `H:MM:SS`, or compact values like `1h 30m`. |
-| `button` | Start cook | Starts cooking using the current or pending cook mode and target temperature. |
+| `button` | Start cook | Starts cooking using the current or pending cook mode and target temperature. It does not set cook duration. |
 | `button` | Stop cook | Stops cooking for the cavity. |
 
 ### Microwave And Hood
@@ -142,12 +142,24 @@ Oven cooking is controlled from the cavity entities:
 5. Set the cavity `Cook duration` text if you want a timed cook.
 6. Press the cavity `Stop cook` button to stop that cavity.
 
-The integration also registers `whirlpool_cooking.set_cook` and
-`whirlpool_cooking.stop_cook` services for automation use. Service temperatures
-are currently passed in Celsius. Timed cook duration is intentionally separate:
-call `whirlpool_cooking.set_cook_time` after the oven reaches the target
-temperature. `cook_time` accepts seconds, `M:SS`, `H:MM:SS`, or compact values
-like `1h 30m`.
+Timed cooking is intentionally a second step. Whirlpool ovens normally start by
+heating to the selected target temperature; the cook duration is set only after
+the oven has reached temperature. For that reason, the integration does not send
+cook duration in the same command as `Start cook`.
+
+### Oven Services
+
+The integration registers these services for automation use:
+
+| Service | Purpose |
+| --- | --- |
+| `whirlpool_cooking.set_cook` | Starts or updates a cavity cook mode and target temperature. Temperatures are passed in Celsius. |
+| `whirlpool_cooking.set_cook_time` | Sets timed-cook duration for a cavity after preheat. `cook_time` accepts seconds, `M:SS`, `H:MM:SS`, or compact values like `1h 30m`. |
+| `whirlpool_cooking.stop_cook` | Stops cooking on a cavity. |
+
+For timed-cook automations, call `whirlpool_cooking.set_cook`, wait until the
+cavity temperature reaches the target temperature or the cavity leaves preheat,
+then call `whirlpool_cooking.set_cook_time`.
 
 Hood light and hood fan controls use normal Home Assistant `light` and `fan`
 services. The hood light supports two Whirlpool brightness levels, and the hood
