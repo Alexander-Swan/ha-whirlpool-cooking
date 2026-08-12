@@ -189,6 +189,25 @@ download diagnostics from the Whirlpool Cooking device entry and include the
 sanitized output when opening an issue. Entity creation is based on the
 attributes and command APIs reported by each appliance.
 
+HACS updates are published from versioned GitHub releases. Install or update the
+latest release from HACS unless you intentionally choose a pre-release.
+
+### Versioning
+
+The integration version is stored in
+`custom_components/whirlpool_cooking/manifest.json` and mirrored in
+`pyproject.toml`.
+
+To prepare a release:
+
+```text
+python scripts/set_version.py 0.2.0
+```
+
+Commit the version change, then run the `Release` GitHub Actions workflow with
+the same version. The workflow validates the checked-in version, runs tests,
+creates the `v0.2.0` tag, and publishes the GitHub release used by HACS.
+
 ### Manual Test Install
 
 Copy the integration directory into your Home Assistant config directory:

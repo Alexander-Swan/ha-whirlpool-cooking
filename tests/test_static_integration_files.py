@@ -34,3 +34,13 @@ def test_services_file_matches_registered_services() -> None:
     assert "SERVICE_STOP_COOK" in services_source
     assert "set_cook:" in services_yaml
     assert "stop_cook:" in services_yaml
+
+
+def test_release_workflow_validates_manifest_version() -> None:
+    """Release workflow should only tag versions already in manifest.json."""
+    workflow = Path(".github/workflows/release.yml").read_text()
+
+    assert "workflow_dispatch:" in workflow
+    assert "scripts/check_version.py" in workflow
+    assert 'git tag "v${{ inputs.version }}"' in workflow
+    assert 'gh release create "v${{ inputs.version }}"' in workflow
