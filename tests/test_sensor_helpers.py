@@ -674,6 +674,87 @@ def test_start_cook_uses_pending_ha_controls(monkeypatch) -> None:
     assert appliance.sent == (204.4, CookMode.Bake, Cavity.Upper)
 
 
+def test_kitchen_timer_controls_create_entities_and_send_commands() -> None:
+    """Kitchen timer controls should send Whirlpool timer operations."""
+    import asyncio
+
+    from custom_components.whirlpool_cooking.button import _button_descriptions
+    from custom_components.whirlpool_cooking.text import _text_descriptions
+    from custom_components.whirlpool_cooking.timer import (
+        cancel_kitchen_timer,
+        parse_duration,
+        start_kitchen_timer,
+    )
+
+    class Timer:
+        def __init__(self, appliance) -> None:
+            self.appliance = appliance
+
+        def get_total_time(self) -> int:
+            return int(
+                self.appliance._data_dict["attributes"]["KitchenTimer01_SetTimeSet"][
+                    "value"
+                ],
+            )
+
+        async def set_timer(self, seconds: int) -> bool:
+            self.appliance.sent = {
+                "KitchenTimer01_SetTimeSet": str(seconds),
+                "KitchenTimer01_SetOperations": "2",
+            }
+            return True
+
+        async def cancel_timer(self) -> bool:
+            self.appliance.sent = {"KitchenTimer01_SetOperations": "1"}
+            return True
+
+    class Appliance:
+        sent = None
+        _data_dict = {
+            "attributes": {
+                "KitchenTimer01_SetTimeSet": {"value": "600"},
+                "KitchenTimer01_SetOperations": {"value": "0"},
+                "KitchenTimer01_StatusState": {"value": "0"},
+                "KitchenTimer01_StatusTimeRemaining": {"value": "0"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+        def get_kitchen_timer(self):
+            return Timer(self)
+
+        async def send_attributes(self, attributes) -> bool:
+            self.sent = attributes
+            return True
+
+    appliance = Appliance()
+    text_description = _text_descriptions(appliance)[0]
+    button_keys = [description.key for description in _button_descriptions(appliance)]
+
+    assert text_description.key == "kitchen_timer_duration"
+    assert text_description.value_fn(appliance) == "10:00"
+    assert "start_kitchen_timer" in button_keys
+    assert "cancel_kitchen_timer" in button_keys
+    assert parse_duration("1:02:03") == 3723
+    assert parse_duration("1h 30m") == 5400
+    assert parse_duration("90") == 90
+
+    asyncio.run(text_description.set_fn(appliance, "1:30"))
+    assert appliance.sent == {"KitchenTimer01_SetTimeSet": "90"}
+    asyncio.run(start_kitchen_timer(appliance))
+    assert appliance.sent == {
+        "KitchenTimer01_SetTimeSet": "600",
+        "KitchenTimer01_SetOperations": "2",
+    }
+    asyncio.run(cancel_kitchen_timer(appliance))
+    assert appliance.sent == {"KitchenTimer01_SetOperations": "1"}
+
+
 def test_missing_library_methods_skip_entities_and_log(
     monkeypatch,
     caplog,

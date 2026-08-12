@@ -45,4 +45,5 @@ PLATFORMS = [
     "select",
     "sensor",
     "switch",
+    "text",
 ]

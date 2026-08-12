@@ -21,6 +21,8 @@ MODULES = (
     "custom_components.whirlpool_cooking.sensor",
     "custom_components.whirlpool_cooking.services",
     "custom_components.whirlpool_cooking.switch",
+    "custom_components.whirlpool_cooking.text",
+    "custom_components.whirlpool_cooking.timer",
 )
 
 

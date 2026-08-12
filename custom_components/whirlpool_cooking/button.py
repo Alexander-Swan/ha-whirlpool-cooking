@@ -24,6 +24,11 @@ from .cooking import (
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists
+from .timer import (
+    cancel_kitchen_timer,
+    kitchen_timer_supported,
+    start_kitchen_timer,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +79,37 @@ async def async_setup_entry(
 
 def _button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
     """Build button descriptions supported by an appliance."""
-    return [*BUTTONS, *_cavity_button_descriptions(appliance)]
+    return [
+        *BUTTONS,
+        *_kitchen_timer_button_descriptions(appliance),
+        *_cavity_button_descriptions(appliance),
+    ]
+
+
+def _kitchen_timer_button_descriptions(
+    appliance: Any,
+) -> list[WhirlpoolButtonDescription]:
+    """Build kitchen timer command buttons."""
+    if not kitchen_timer_supported(appliance):
+        return []
+    return [
+        WhirlpoolButtonDescription(
+            key="start_kitchen_timer",
+            translation_key="start_kitchen_timer",
+            press_fn=lambda item, coordinator: _async_start_kitchen_timer(
+                item,
+                coordinator,
+            ),
+        ),
+        WhirlpoolButtonDescription(
+            key="cancel_kitchen_timer",
+            translation_key="cancel_kitchen_timer",
+            press_fn=lambda item, coordinator: _async_cancel_kitchen_timer(
+                item,
+                coordinator,
+            ),
+        ),
+    ]
 
 
 def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
@@ -145,6 +180,28 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
 async def _async_refresh(coordinator: WhirlpoolCookingCoordinator) -> None:
     """Refresh coordinator data."""
     await coordinator.async_request_refresh()
+
+
+async def _async_start_kitchen_timer(
+    appliance: Any,
+    coordinator: WhirlpoolCookingCoordinator,
+) -> bool:
+    """Start the Whirlpool kitchen timer."""
+    result = await start_kitchen_timer(appliance)
+    if result:
+        await coordinator.async_request_refresh()
+    return result
+
+
+async def _async_cancel_kitchen_timer(
+    appliance: Any,
+    coordinator: WhirlpoolCookingCoordinator,
+) -> bool:
+    """Cancel the Whirlpool kitchen timer."""
+    result = await cancel_kitchen_timer(appliance)
+    if result:
+        await coordinator.async_request_refresh()
+    return result
 
 
 async def _async_stop_cook(

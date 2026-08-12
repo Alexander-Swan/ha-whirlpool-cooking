@@ -82,6 +82,8 @@
     },
     "button": {
       "refresh": { "name": "Refresh" },
+      "start_kitchen_timer": { "name": "Start kitchen timer" },
+      "cancel_kitchen_timer": { "name": "Cancel kitchen timer" },
       "upper_stop_cook": { "name": "Upper stop cook" },
       "lower_stop_cook": { "name": "Lower stop cook" }
     },
@@ -102,6 +104,9 @@
     "switch": {
       "control_lock": { "name": "Control lock" },
       "sabbath_mode": { "name": "Sabbath mode" }
+    },
+    "text": {
+      "kitchen_timer_duration": { "name": "Kitchen timer duration" }
     }
   }
 }

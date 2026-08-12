@@ -18,6 +18,8 @@ This project is an early test integration. The current implementation supports:
   polling fallback if push setup fails
 - oven cavity devices and entities for state, temperature, door, light, cook
   mode, target temperature, and cook start/stop controls
+- kitchen timer duration, start, and cancel controls when timer operation
+  attributes are reported by the appliance
 - microwave sensors plus hood light, microwave light, and multi-speed hood fan
   controls when those attributes are reported by the appliance
 - global appliance sensors, switches, diagnostics, and a manual refresh button
@@ -48,6 +50,9 @@ For a two-cavity appliance, the integration should not also create a generic
 | --- | --- | --- |
 | `binary_sensor` | Online | Connectivity state from `get_online()`. |
 | `button` | Refresh | Diagnostic button that requests a fresh cloud update. |
+| `text` | Kitchen timer duration | Created when the appliance reports `KitchenTimer01_SetTimeSet` and supports timer commands. Accepts values like `10:00`, `1:30:00`, `90`, or `1h 30m`. |
+| `button` | Start kitchen timer | Starts the kitchen timer using the configured duration. |
+| `button` | Cancel kitchen timer | Cancels the kitchen timer. |
 | `switch` | Control lock | Created when `Sys_OperationSetControlLock` is present. |
 | `switch` | Sabbath mode | Created when `Sys_OperationSetSabbathModeEnabled` is present. |
 
@@ -139,6 +144,11 @@ are currently passed in Celsius.
 Hood light and hood fan controls use normal Home Assistant `light` and `fan`
 services. The hood light supports two Whirlpool brightness levels, and the hood
 fan supports `Off`, `Low`, `Medium`, `Medium-high`, and `High` controls.
+
+Kitchen timer control is available when the appliance exposes the Whirlpool
+kitchen timer operation attributes. Set `Kitchen timer duration`, then press
+`Start kitchen timer`. Use `Cancel kitchen timer` to stop it. The duration text
+accepts seconds, `M:SS`, `H:MM:SS`, or compact values like `1h 30m`.
 
 ## Options
 
