@@ -81,6 +81,7 @@ stay on the main appliance device.
 | `light` | Light | Created when the cavity reports a light status attribute. |
 | `select` | Cook mode | Selects a supported cook mode for the cavity. Options are filtered from appliance capability data when available. |
 | `number` | Target temperature | Sets the pending target temperature for the cavity in the configured display unit. |
+| `text` | Cook duration | Sets an optional timed-cook duration. Accepts seconds, `M:SS`, `H:MM:SS`, or compact values like `1h 30m`. |
 | `button` | Start cook | Starts cooking using the current or pending cook mode and target temperature. |
 | `button` | Stop cook | Stops cooking for the cavity. |
 
@@ -136,12 +137,15 @@ Oven cooking is controlled from the cavity entities:
 
 1. Pick a value in the cavity `Cook mode` select.
 2. Set the cavity `Target temperature` number.
-3. Press the cavity `Start cook` button.
-4. Press the cavity `Stop cook` button to stop that cavity.
+3. Optionally set the cavity `Cook duration` text.
+4. Press the cavity `Start cook` button.
+5. Press the cavity `Stop cook` button to stop that cavity.
 
 The integration also registers `whirlpool_cooking.set_cook` and
 `whirlpool_cooking.stop_cook` services for automation use. Service temperatures
-are currently passed in Celsius.
+are currently passed in Celsius. `whirlpool_cooking.set_cook` also accepts an
+optional `cook_time` value in seconds, `M:SS`, `H:MM:SS`, or compact values like
+`1h 30m`.
 
 Hood light and hood fan controls use normal Home Assistant `light` and `fan`
 services. The hood light supports two Whirlpool brightness levels, and the hood

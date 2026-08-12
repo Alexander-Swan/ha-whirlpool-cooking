@@ -13,7 +13,9 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
+from .cooking import cavity_attribute, cook_mode_attribute_value
 from .coordinator import WhirlpoolCookingCoordinator
+from .timer import parse_duration
 
 SERVICE_SET_COOK = "set_cook"
 SERVICE_STOP_COOK = "stop_cook"
@@ -21,6 +23,7 @@ SERVICE_STOP_COOK = "stop_cook"
 ATTR_CAVITY = "cavity"
 ATTR_MODE = "mode"
 ATTR_TARGET_TEMPERATURE_CELSIUS = "target_temperature_celsius"
+ATTR_COOK_TIME = "cook_time"
 
 CAVITY_OPTIONS = ("upper", "lower")
 COOK_MODE_OPTIONS = (
@@ -39,6 +42,7 @@ SET_COOK_SCHEMA = vol.Schema(
         vol.Required(ATTR_CAVITY): vol.In(CAVITY_OPTIONS),
         vol.Required(ATTR_MODE, default="bake"): vol.In(COOK_MODE_OPTIONS),
         vol.Required(ATTR_TARGET_TEMPERATURE_CELSIUS): vol.Coerce(float),
+        vol.Optional(ATTR_COOK_TIME): vol.Any(vol.Coerce(int), cv.string),
     },
 )
 
@@ -62,11 +66,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
         cavity = _cavity(call.data[ATTR_CAVITY])
         mode = _cook_mode(call.data[ATTR_MODE])
-        if not await appliance.set_cook(
-            call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
-            mode,
-            cavity,
-        ):
+        cook_time = _cook_time(call.data.get(ATTR_COOK_TIME))
+        if cook_time is None:
+            result = await appliance.set_cook(
+                call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
+                mode,
+                cavity,
+            )
+        else:
+            result = await _set_cook_with_time(
+                appliance,
+                call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
+                call.data[ATTR_MODE],
+                cavity,
+                cook_time,
+            )
+        if not result:
             raise HomeAssistantError("Whirlpool rejected the set cook command")
         await coordinator.async_request_refresh()
 
@@ -152,3 +167,39 @@ def _cook_mode(value: str) -> Any:
         if mode.name.lower() == normalized:
             return mode
     raise HomeAssistantError(f"Unsupported Whirlpool cook mode: {value}")
+
+
+def _cook_time(value: Any) -> int | None:
+    """Return an optional cook time in seconds."""
+    if value is None:
+        return None
+    try:
+        return parse_duration(str(value))
+    except ValueError as err:
+        raise HomeAssistantError(str(err)) from err
+
+
+async def _set_cook_with_time(
+    appliance: Any,
+    target_temperature_celsius: float,
+    mode: str,
+    cavity: Any,
+    cook_time: int,
+) -> bool:
+    """Start cooking with a cook time included in the command payload."""
+    from whirlpool.oven import COOK_OPERATION_MAP, CookOperation
+
+    return await appliance.send_attributes(
+        {
+            cavity_attribute(cavity, "CycleSetCommonMode"): cook_mode_attribute_value(
+                mode,
+            ),
+            cavity_attribute(cavity, "CycleSetTargetTemp"): str(
+                round(target_temperature_celsius * 10),
+            ),
+            cavity_attribute(cavity, "TimeSetCookTimeSet"): str(cook_time),
+            cavity_attribute(cavity, "OpSetOperations"): COOK_OPERATION_MAP[
+                CookOperation.Start
+            ],
+        },
+    )

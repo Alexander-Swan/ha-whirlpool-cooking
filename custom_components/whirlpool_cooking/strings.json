@@ -122,7 +122,9 @@
       "sabbath_mode": { "name": "Sabbath mode" }
     },
     "text": {
-      "kitchen_timer_duration": { "name": "Kitchen timer duration" }
+      "kitchen_timer_duration": { "name": "Kitchen timer duration" },
+      "upper_cook_duration": { "name": "Upper cook duration" },
+      "lower_cook_duration": { "name": "Lower cook duration" }
     }
   }
 }

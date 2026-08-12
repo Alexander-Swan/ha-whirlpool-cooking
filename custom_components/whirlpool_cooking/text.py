@@ -13,8 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .cavity import cavity_device_key, cavity_device_name
+from .cooking import cavity_attribute, set_pending_cook_time
 from .coordinator import WhirlpoolCookingCoordinator
-from .entity import WhirlpoolCookingEntity, appliance_label
+from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
+from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
 from .timer import (
     format_duration,
     kitchen_timer_duration,
@@ -32,6 +35,7 @@ class WhirlpoolTextDescription(TextEntityDescription):
 
     value_fn: Callable[[Any], str | None]
     set_fn: Callable[[Any, str], Awaitable[bool]]
+    cavity: Any | None = None
 
 
 async def async_setup_entry(
@@ -62,9 +66,11 @@ async def async_setup_entry(
 
 def _text_descriptions(appliance: Any) -> list[WhirlpoolTextDescription]:
     """Build text descriptions supported by an appliance."""
+    descriptions = _cavity_text_descriptions(appliance)
     if not kitchen_timer_supported(appliance):
-        return []
+        return descriptions
     return [
+        *descriptions,
         WhirlpoolTextDescription(
             key="kitchen_timer_duration",
             translation_key="kitchen_timer_duration",
@@ -74,6 +80,43 @@ def _text_descriptions(appliance: Any) -> list[WhirlpoolTextDescription]:
     ]
 
 
+def _cavity_text_descriptions(appliance: Any) -> list[WhirlpoolTextDescription]:
+    """Build oven cavity text controls."""
+    try:
+        from whirlpool.oven import Cavity
+    except ModuleNotFoundError:
+        _LOGGER.warning(
+            "Whirlpool oven support is unavailable; skipping oven text controls",
+            exc_info=True,
+        )
+        return []
+
+    descriptions: list[WhirlpoolTextDescription] = []
+    for cavity in (Cavity.Upper, Cavity.Lower):
+        attribute = cavity_attribute(cavity, "TimeSetCookTimeSet")
+        if not _cavity_exists(appliance, cavity) or not _has_attribute(
+            appliance,
+            attribute,
+        ):
+            continue
+
+        cavity_key = cavity.name.lower()
+        descriptions.append(
+            WhirlpoolTextDescription(
+                key=f"{cavity_key}_cook_duration",
+                translation_key=f"{cavity_key}_cook_duration",
+                cavity=cavity,
+                value_fn=lambda item, attr=attribute: format_duration(
+                    _raw_duration(item, attr),
+                ),
+                set_fn=lambda item, value, oven_cavity=cavity, attr=attribute: (
+                    _set_cook_duration(item, oven_cavity, attr, value)
+                ),
+            ),
+        )
+    return descriptions
+
+
 async def _set_kitchen_timer_duration(appliance: Any, value: str) -> bool:
     """Set the kitchen timer duration from a user-entered duration string."""
     try:
@@ -81,6 +124,35 @@ async def _set_kitchen_timer_duration(appliance: Any, value: str) -> bool:
     except ValueError as err:
         raise HomeAssistantError(str(err)) from err
     return await set_kitchen_timer_duration(appliance, seconds)
+
+
+async def _set_cook_duration(
+    appliance: Any,
+    cavity: Any,
+    attribute: str,
+    value: str,
+) -> bool:
+    """Set a cavity cook duration from a user-entered duration string."""
+    try:
+        seconds = parse_duration(value)
+    except ValueError as err:
+        raise HomeAssistantError(str(err)) from err
+    if not has_callable(appliance, "send_attributes"):
+        return False
+    result = await appliance.send_attributes({attribute: str(seconds)})
+    if result:
+        set_pending_cook_time(appliance, cavity, seconds)
+    return result
+
+
+def _raw_duration(appliance: Any, attribute: str) -> int | None:
+    """Return a raw duration attribute as seconds."""
+    value = _raw_attribute_value(appliance, attribute)
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
 
 
 class WhirlpoolCookingText(WhirlpoolCookingEntity, TextEntity):
@@ -95,7 +167,13 @@ class WhirlpoolCookingText(WhirlpoolCookingEntity, TextEntity):
         description: WhirlpoolTextDescription,
     ) -> None:
         """Initialize the text entity."""
-        super().__init__(coordinator, appliance, description.key)
+        super().__init__(
+            coordinator,
+            appliance,
+            description.key,
+            device_key=cavity_device_key(appliance, description.cavity),
+            device_name=cavity_device_name(appliance, description.cavity),
+        )
         self.entity_description = description
 
     @property

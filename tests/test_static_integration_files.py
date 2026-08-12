@@ -34,6 +34,7 @@ def test_services_file_matches_registered_services() -> None:
     assert "SERVICE_STOP_COOK" in services_source
     assert "set_cook:" in services_yaml
     assert "stop_cook:" in services_yaml
+    assert "cook_time:" in services_yaml
 
 
 def test_release_workflow_validates_manifest_version() -> None:

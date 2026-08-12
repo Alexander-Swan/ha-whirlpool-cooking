@@ -35,6 +35,10 @@ set_cook:
           max: 300
           step: 1
           unit_of_measurement: "C"
+    cook_time:
+      required: false
+      selector:
+        text:
 
 stop_cook:
   name: Stop cook

@@ -755,6 +755,100 @@ def test_kitchen_timer_controls_create_entities_and_send_commands() -> None:
     assert appliance.sent == {"KitchenTimer01_SetOperations": "1"}
 
 
+def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> None:
+    """Timed cook controls should send duration with the start cook payload."""
+    import asyncio
+    import types
+    from enum import Enum
+
+    from custom_components.whirlpool_cooking.button import _async_start_cook
+    from custom_components.whirlpool_cooking.cooking import (
+        set_pending_target_temperature,
+    )
+    from custom_components.whirlpool_cooking.text import _text_descriptions
+
+    class Cavity:
+        Upper = type("Upper", (), {"name": "Upper"})()
+        Lower = type("Lower", (), {"name": "Lower"})()
+
+    class CookMode(Enum):
+        Bake = 2
+
+    class CookOperation(Enum):
+        Start = 2
+
+    oven_module = types.ModuleType("whirlpool.oven")
+    oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
+    oven_module.CAVITY_PREFIX_MAP = {
+        Cavity.Upper: "OvenUpperCavity",
+        Cavity.Lower: "OvenLowerCavity",
+    }
+    oven_module.Cavity = Cavity
+    oven_module.CookMode = CookMode
+    oven_module.CookOperation = CookOperation
+    oven_module.COOK_MODE_MAP = {CookMode.Bake: "2"}
+    oven_module.COOK_OPERATION_MAP = {CookOperation.Start: "2"}
+    monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
+
+    class Appliance:
+        sent = None
+        _data_dict = {
+            "attributes": {
+                "OvenUpperCavity_OpStatusState": {"value": "0"},
+                "OvenUpperCavity_CycleSetCommonMode": {"value": "2"},
+                "OvenUpperCavity_CycleSetTargetTemp": {"value": "1750"},
+                "OvenUpperCavity_TimeSetCookTimeSet": {"value": "1800"},
+            },
+        }
+
+        def has_attribute(self, attribute: str) -> bool:
+            return attribute in self._data_dict["attributes"]
+
+        def _get_attribute(self, attribute: str) -> str:
+            return self._data_dict["attributes"][attribute]["value"]
+
+        def get_oven_cavity_exists(self, cavity) -> bool:
+            return cavity is Cavity.Upper
+
+        def get_cook_mode(self, cavity):
+            return CookMode.Bake
+
+        def get_target_temp(self, cavity) -> float:
+            return 175
+
+        async def send_attributes(self, attributes) -> bool:
+            self.sent = attributes
+            return True
+
+    class Coordinator:
+        async def async_request_refresh(self) -> None:
+            return None
+
+    appliance = Appliance()
+    descriptions = _text_descriptions(appliance)
+    cook_duration = next(
+        description
+        for description in descriptions
+        if description.key == "upper_cook_duration"
+    )
+
+    assert cook_duration.value_fn(appliance) == "30:00"
+
+    asyncio.run(cook_duration.set_fn(appliance, "45:00"))
+    assert appliance.sent == {"OvenUpperCavity_TimeSetCookTimeSet": "2700"}
+
+    set_pending_target_temperature(appliance, Cavity.Upper, 204.4)
+    result = asyncio.run(_async_start_cook(appliance, Coordinator(), Cavity.Upper))
+
+    assert result is True
+    assert appliance.sent == {
+        "OvenUpperCavity_CycleSetCommonMode": "2",
+        "OvenUpperCavity_CycleSetTargetTemp": "2044",
+        "OvenUpperCavity_TimeSetCookTimeSet": "2700",
+        "OvenUpperCavity_OpSetOperations": "2",
+    }
+
+
 def test_missing_library_methods_skip_entities_and_log(
     monkeypatch,
     caplog,
