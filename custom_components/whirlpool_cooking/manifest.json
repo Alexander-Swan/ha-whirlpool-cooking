@@ -1,7 +1,7 @@
 {
   "domain": "whirlpool_cooking",
   "name": "Whirlpool Cooking",
-  "codeowners": [],
+  "codeowners": ["@Alexander-Swan"],
   "config_flow": true,
   "documentation": "https://github.com/Alexander-Swan/ha-whirlpool-cooking",
   "integration_type": "device",

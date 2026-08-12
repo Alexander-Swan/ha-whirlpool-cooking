@@ -44,3 +44,16 @@ def test_release_workflow_validates_manifest_version() -> None:
     assert "scripts/check_version.py" in workflow
     assert 'git tag "v${{ inputs.version }}"' in workflow
     assert 'gh release create "v${{ inputs.version }}"' in workflow
+
+
+def test_hacs_validation_workflow_exists() -> None:
+    """HACS publish docs recommend validating the repository with hacs/action."""
+    workflow = Path(".github/workflows/validate.yml").read_text()
+
+    assert "hacs/action@main" in workflow
+    assert "category: integration" in workflow
+
+
+def test_brand_icon_exists() -> None:
+    """HACS publish docs require repository brand assets."""
+    assert Path("brand/icon.png").is_file()

@@ -1,5 +1,7 @@
 # Whirlpool Cooking
 
+![Whirlpool Cooking icon](brand/icon.png)
+
 Custom Home Assistant integration for Whirlpool-family cooking appliances that
 are not fully covered by Home Assistant Core's Whirlpool integration.
 
@@ -191,6 +193,10 @@ attributes and command APIs reported by each appliance.
 
 HACS updates are published from versioned GitHub releases. Install or update the
 latest release from HACS unless you intentionally choose a pre-release.
+
+This repository follows the HACS integration publishing layout: one integration
+under `custom_components/whirlpool_cooking`, a root `hacs.json`, a versioned
+`manifest.json`, and repository brand assets under `brand/`.
 
 ### Versioning
 

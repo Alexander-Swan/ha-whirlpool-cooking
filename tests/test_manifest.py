@@ -23,6 +23,7 @@ def test_manifest_is_hacs_ready() -> None:
     assert manifest["domain"] == "whirlpool_cooking"
     assert manifest["config_flow"] is True
     assert manifest["iot_class"] == "cloud_polling"
+    assert manifest["codeowners"] == ["@Alexander-Swan"]
     assert "whirlpool-sixth-sense" in manifest["requirements"][0]
     assert SEMVER_RE.fullmatch(manifest["version"])
 
