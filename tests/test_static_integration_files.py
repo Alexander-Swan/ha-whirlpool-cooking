@@ -56,4 +56,4 @@ def test_hacs_validation_workflow_exists() -> None:
 
 def test_brand_icon_exists() -> None:
     """HACS publish docs require repository brand assets."""
-    assert Path("brand/icon.png").is_file()
+    assert Path("custom_components/whirlpool_cooking/brand/icon.png").is_file()

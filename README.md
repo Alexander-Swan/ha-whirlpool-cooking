@@ -1,6 +1,6 @@
 # Whirlpool Cooking
 
-![Whirlpool Cooking icon](brand/icon.png)
+![Whirlpool Cooking icon](custom_components/whirlpool_cooking/brand/icon.png)
 
 Custom Home Assistant integration for Whirlpool-family cooking appliances that
 are not fully covered by Home Assistant Core's Whirlpool integration.
@@ -196,7 +196,8 @@ latest release from HACS unless you intentionally choose a pre-release.
 
 This repository follows the HACS integration publishing layout: one integration
 under `custom_components/whirlpool_cooking`, a root `hacs.json`, a versioned
-`manifest.json`, and repository brand assets under `brand/`.
+`manifest.json`, and integration brand assets under
+`custom_components/whirlpool_cooking/brand/`.
 
 ### Versioning
 
