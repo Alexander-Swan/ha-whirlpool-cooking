@@ -31,8 +31,10 @@ def test_services_file_matches_registered_services() -> None:
 
     assert "async_setup_services" in init_source
     assert "SERVICE_SET_COOK" in services_source
+    assert "SERVICE_SET_COOK_TIME" in services_source
     assert "SERVICE_STOP_COOK" in services_source
     assert "set_cook:" in services_yaml
+    assert "set_cook_time:" in services_yaml
     assert "stop_cook:" in services_yaml
     assert "cook_time:" in services_yaml
 

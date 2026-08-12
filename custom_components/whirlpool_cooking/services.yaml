@@ -35,8 +35,24 @@ set_cook:
           max: 300
           step: 1
           unit_of_measurement: "C"
+set_cook_time:
+  name: Set cook time
+  description: Set the timed cook duration on an oven cavity after preheat.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: whirlpool_cooking
+    cavity:
+      required: true
+      selector:
+        select:
+          options:
+            - upper
+            - lower
     cook_time:
-      required: false
+      required: true
       selector:
         text:
 

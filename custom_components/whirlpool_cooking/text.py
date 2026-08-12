@@ -14,7 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
-from .cooking import cavity_attribute, set_pending_cook_time
+from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
@@ -139,10 +139,7 @@ async def _set_cook_duration(
         raise HomeAssistantError(str(err)) from err
     if not has_callable(appliance, "send_attributes"):
         return False
-    result = await appliance.send_attributes({attribute: str(seconds)})
-    if result:
-        set_pending_cook_time(appliance, cavity, seconds)
-    return result
+    return await appliance.send_attributes({attribute: str(seconds)})
 
 
 def _raw_duration(appliance: Any, attribute: str) -> int | None:

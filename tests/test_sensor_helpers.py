@@ -755,8 +755,8 @@ def test_kitchen_timer_controls_create_entities_and_send_commands() -> None:
     assert appliance.sent == {"KitchenTimer01_SetOperations": "1"}
 
 
-def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> None:
-    """Timed cook controls should send duration with the start cook payload."""
+def test_cook_duration_control_is_separate_from_start_cook(monkeypatch) -> None:
+    """Timed cook controls should be sent after the start cook command."""
     import asyncio
     import types
     from enum import Enum
@@ -774,9 +774,6 @@ def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> No
     class CookMode(Enum):
         Bake = 2
 
-    class CookOperation(Enum):
-        Start = 2
-
     oven_module = types.ModuleType("whirlpool.oven")
     oven_module.ATTR_POSTFIX_STATUS_STATE = "OpStatusState"
     oven_module.CAVITY_PREFIX_MAP = {
@@ -785,9 +782,7 @@ def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> No
     }
     oven_module.Cavity = Cavity
     oven_module.CookMode = CookMode
-    oven_module.CookOperation = CookOperation
     oven_module.COOK_MODE_MAP = {CookMode.Bake: "2"}
-    oven_module.COOK_OPERATION_MAP = {CookOperation.Start: "2"}
     monkeypatch.setitem(sys.modules, "whirlpool.oven", oven_module)
 
     class Appliance:
@@ -816,6 +811,10 @@ def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> No
         def get_target_temp(self, cavity) -> float:
             return 175
 
+        async def set_cook(self, target_temp, mode, cavity) -> bool:
+            self.sent = (target_temp, mode, cavity)
+            return True
+
         async def send_attributes(self, attributes) -> bool:
             self.sent = attributes
             return True
@@ -841,12 +840,7 @@ def test_cook_duration_control_is_included_when_starting_cook(monkeypatch) -> No
     result = asyncio.run(_async_start_cook(appliance, Coordinator(), Cavity.Upper))
 
     assert result is True
-    assert appliance.sent == {
-        "OvenUpperCavity_CycleSetCommonMode": "2",
-        "OvenUpperCavity_CycleSetTargetTemp": "2044",
-        "OvenUpperCavity_TimeSetCookTimeSet": "2700",
-        "OvenUpperCavity_OpSetOperations": "2",
-    }
+    assert appliance.sent == (204.4, CookMode.Bake, Cavity.Upper)
 
 
 def test_missing_library_methods_skip_entities_and_log(

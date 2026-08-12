@@ -90,20 +90,6 @@ def get_pending_target_temperature(appliance: Any, cavity: Any) -> float | None:
         return None
 
 
-def get_pending_cook_time(appliance: Any, cavity: Any) -> int | None:
-    """Return the pending cook time in seconds for a cavity."""
-    value = _pending_controls(appliance).get(_pending_key(cavity, "cook_time"))
-    try:
-        return None if value is None else int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def set_pending_cook_time(appliance: Any, cavity: Any, seconds: int) -> None:
-    """Store the pending cook time in seconds for a cavity."""
-    _pending_controls(appliance)[_pending_key(cavity, "cook_time")] = seconds
-
-
 def set_pending_target_temperature(
     appliance: Any,
     cavity: Any,

@@ -13,11 +13,12 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
-from .cooking import cavity_attribute, cook_mode_attribute_value
+from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
 from .timer import parse_duration
 
 SERVICE_SET_COOK = "set_cook"
+SERVICE_SET_COOK_TIME = "set_cook_time"
 SERVICE_STOP_COOK = "stop_cook"
 
 ATTR_CAVITY = "cavity"
@@ -42,7 +43,14 @@ SET_COOK_SCHEMA = vol.Schema(
         vol.Required(ATTR_CAVITY): vol.In(CAVITY_OPTIONS),
         vol.Required(ATTR_MODE, default="bake"): vol.In(COOK_MODE_OPTIONS),
         vol.Required(ATTR_TARGET_TEMPERATURE_CELSIUS): vol.Coerce(float),
-        vol.Optional(ATTR_COOK_TIME): vol.Any(vol.Coerce(int), cv.string),
+    },
+)
+
+SET_COOK_TIME_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(ATTR_CAVITY): vol.In(CAVITY_OPTIONS),
+        vol.Required(ATTR_COOK_TIME): vol.Any(vol.Coerce(int), cv.string),
     },
 )
 
@@ -66,23 +74,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
         cavity = _cavity(call.data[ATTR_CAVITY])
         mode = _cook_mode(call.data[ATTR_MODE])
-        cook_time = _cook_time(call.data.get(ATTR_COOK_TIME))
-        if cook_time is None:
-            result = await appliance.set_cook(
-                call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
-                mode,
-                cavity,
-            )
-        else:
-            result = await _set_cook_with_time(
-                appliance,
-                call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
-                call.data[ATTR_MODE],
-                cavity,
-                cook_time,
-            )
-        if not result:
+        if not await appliance.set_cook(
+            call.data[ATTR_TARGET_TEMPERATURE_CELSIUS],
+            mode,
+            cavity,
+        ):
             raise HomeAssistantError("Whirlpool rejected the set cook command")
+        await coordinator.async_request_refresh()
+
+    async def async_set_cook_time(call: ServiceCall) -> None:
+        appliance, coordinator = _appliance_from_entity(
+            hass,
+            call.data[ATTR_ENTITY_ID],
+        )
+        if not await _set_cook_time(
+            appliance,
+            _cavity(call.data[ATTR_CAVITY]),
+            _cook_time(call.data[ATTR_COOK_TIME]),
+        ):
+            raise HomeAssistantError("Whirlpool rejected the set cook time command")
         await coordinator.async_request_refresh()
 
     async def async_stop_cook(call: ServiceCall) -> None:
@@ -99,6 +109,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_SET_COOK,
         async_set_cook,
         schema=SET_COOK_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_COOK_TIME,
+        async_set_cook_time,
+        schema=SET_COOK_TIME_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN,
@@ -170,36 +186,19 @@ def _cook_mode(value: str) -> Any:
 
 
 def _cook_time(value: Any) -> int | None:
-    """Return an optional cook time in seconds."""
-    if value is None:
-        return None
+    """Return a cook time in seconds."""
     try:
         return parse_duration(str(value))
     except ValueError as err:
         raise HomeAssistantError(str(err)) from err
 
 
-async def _set_cook_with_time(
+async def _set_cook_time(
     appliance: Any,
-    target_temperature_celsius: float,
-    mode: str,
     cavity: Any,
     cook_time: int,
 ) -> bool:
-    """Start cooking with a cook time included in the command payload."""
-    from whirlpool.oven import COOK_OPERATION_MAP, CookOperation
-
+    """Set the cook time for a cavity after cooking has started."""
     return await appliance.send_attributes(
-        {
-            cavity_attribute(cavity, "CycleSetCommonMode"): cook_mode_attribute_value(
-                mode,
-            ),
-            cavity_attribute(cavity, "CycleSetTargetTemp"): str(
-                round(target_temperature_celsius * 10),
-            ),
-            cavity_attribute(cavity, "TimeSetCookTimeSet"): str(cook_time),
-            cavity_attribute(cavity, "OpSetOperations"): COOK_OPERATION_MAP[
-                CookOperation.Start
-            ],
-        },
+        {cavity_attribute(cavity, "TimeSetCookTimeSet"): str(cook_time)},
     )

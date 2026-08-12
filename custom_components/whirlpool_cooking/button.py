@@ -16,12 +16,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
 from .cooking import (
-    cavity_attribute,
-    cook_mode_attribute_value,
     cook_mode_from_option,
     cook_mode_option,
     get_pending_cook_mode_option,
-    get_pending_cook_time,
     get_pending_target_temperature,
 )
 from .coordinator import WhirlpoolCookingCoordinator
@@ -239,52 +236,16 @@ async def _async_start_cook(
         or 175
     )
     try:
-        cook_time = get_pending_cook_time(appliance, cavity)
-        if cook_time is not None and has_callable(appliance, "send_attributes"):
-            result = await _send_start_cook_attributes(
-                appliance,
-                cavity,
-                mode_option,
-                target_temp,
-                cook_time,
-            )
-        else:
-            result = await appliance.set_cook(
-                target_temp,
-                cook_mode_from_option(mode_option),
-                cavity,
-            )
+        result = await appliance.set_cook(
+            target_temp,
+            cook_mode_from_option(mode_option),
+            cavity,
+        )
     except Exception as err:
         raise HomeAssistantError("Whirlpool start cook command failed") from err
     if result:
         await coordinator.async_request_refresh()
     return result
-
-
-async def _send_start_cook_attributes(
-    appliance: Any,
-    cavity: Any,
-    mode_option: str,
-    target_temp: float,
-    cook_time: int,
-) -> bool:
-    """Start cooking with cook time included in the raw attribute payload."""
-    from whirlpool.oven import COOK_OPERATION_MAP, CookOperation
-
-    return await appliance.send_attributes(
-        {
-            cavity_attribute(cavity, "CycleSetCommonMode"): cook_mode_attribute_value(
-                mode_option,
-            ),
-            cavity_attribute(cavity, "CycleSetTargetTemp"): str(
-                round(target_temp * 10),
-            ),
-            cavity_attribute(cavity, "TimeSetCookTimeSet"): str(cook_time),
-            cavity_attribute(cavity, "OpSetOperations"): COOK_OPERATION_MAP[
-                CookOperation.Start
-            ],
-        },
-    )
 
 
 def _current_cook_mode_option(appliance: Any, cavity: Any) -> str | None:
