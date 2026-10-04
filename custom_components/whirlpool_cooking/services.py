@@ -15,6 +15,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN
 from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
+from .sensor import _set_raw_attribute_value
 from .timer import parse_duration
 
 SERVICE_SET_COOK = "set_cook"
@@ -199,6 +200,9 @@ async def _set_cook_time(
     cook_time: int,
 ) -> bool:
     """Set the cook time for a cavity after cooking has started."""
-    return await appliance.send_attributes(
-        {cavity_attribute(cavity, "TimeSetCookTimeSet"): str(cook_time)},
-    )
+    attribute = cavity_attribute(cavity, "TimeSetCookTimeSet")
+    value = str(cook_time)
+    if not await appliance.send_attributes({attribute: value}):
+        return False
+    _set_raw_attribute_value(appliance, attribute, value)
+    return True

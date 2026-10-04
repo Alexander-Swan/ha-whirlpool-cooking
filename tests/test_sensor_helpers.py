@@ -742,17 +742,28 @@ def test_kitchen_timer_controls_create_entities_and_send_commands() -> None:
     assert "cancel_kitchen_timer" in button_keys
     assert parse_duration("1:02:03") == 3723
     assert parse_duration("1h 30m") == 5400
+    assert parse_duration("1 h 30 m") == 5400
+    assert parse_duration("1h30m") == 5400
     assert parse_duration("90") == 90
+    assert parse_duration("0") == 0
+    with pytest.raises(ValueError):
+        parse_duration("1h banana")
+    with pytest.raises(ValueError):
+        parse_duration("10 minutes")
 
     asyncio.run(text_description.set_fn(appliance, "1:30"))
     assert appliance.sent == {"KitchenTimer01_SetTimeSet": "90"}
+    assert text_description.value_fn(appliance) == "1:30"
     asyncio.run(start_kitchen_timer(appliance))
     assert appliance.sent == {
-        "KitchenTimer01_SetTimeSet": "600",
+        "KitchenTimer01_SetTimeSet": "90",
         "KitchenTimer01_SetOperations": "2",
     }
     asyncio.run(cancel_kitchen_timer(appliance))
     assert appliance.sent == {"KitchenTimer01_SetOperations": "1"}
+    assert appliance._data_dict["attributes"]["KitchenTimer01_StatusTimeRemaining"][
+        "value"
+    ] == "0"
 
 
 def test_cook_duration_control_is_separate_from_start_cook(monkeypatch) -> None:
@@ -765,6 +776,7 @@ def test_cook_duration_control_is_separate_from_start_cook(monkeypatch) -> None:
     from custom_components.whirlpool_cooking.cooking import (
         set_pending_target_temperature,
     )
+    from custom_components.whirlpool_cooking.services import _set_cook_time
     from custom_components.whirlpool_cooking.text import _text_descriptions
 
     class Cavity:
@@ -835,6 +847,15 @@ def test_cook_duration_control_is_separate_from_start_cook(monkeypatch) -> None:
 
     asyncio.run(cook_duration.set_fn(appliance, "45:00"))
     assert appliance.sent == {"OvenUpperCavity_TimeSetCookTimeSet": "2700"}
+    assert cook_duration.value_fn(appliance) == "45:00"
+
+    asyncio.run(cook_duration.set_fn(appliance, "0"))
+    assert appliance.sent == {"OvenUpperCavity_TimeSetCookTimeSet": "0"}
+    assert cook_duration.value_fn(appliance) == "0:00"
+
+    assert asyncio.run(_set_cook_time(appliance, Cavity.Upper, 1200)) is True
+    assert appliance.sent == {"OvenUpperCavity_TimeSetCookTimeSet": "1200"}
+    assert cook_duration.value_fn(appliance) == "20:00"
 
     set_pending_target_temperature(appliance, Cavity.Upper, 204.4)
     result = asyncio.run(_async_start_cook(appliance, Coordinator(), Cavity.Upper))

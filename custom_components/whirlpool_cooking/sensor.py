@@ -456,6 +456,19 @@ def _raw_attribute_value(appliance: Any, attribute: str) -> Any:
     return value
 
 
+def _set_raw_attribute_value(appliance: Any, attribute: str, value: str) -> None:
+    """Update a raw Whirlpool attribute value in the local cache."""
+    attributes = getattr(appliance, "_data_dict", {}).get("attributes")
+    if not isinstance(attributes, dict) or attribute not in attributes:
+        return
+
+    details = attributes[attribute]
+    if isinstance(details, dict):
+        details["value"] = value
+    else:
+        attributes[attribute] = value
+
+
 def _microwave_value_fn(
     attribute: str,
     is_duration: bool,

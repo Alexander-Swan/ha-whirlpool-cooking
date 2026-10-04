@@ -17,7 +17,12 @@ from .cavity import cavity_device_key, cavity_device_name
 from .cooking import cavity_attribute
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
-from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
+from .sensor import (
+    _cavity_exists,
+    _has_attribute,
+    _raw_attribute_value,
+    _set_raw_attribute_value,
+)
 from .timer import (
     format_duration,
     kitchen_timer_duration,
@@ -139,7 +144,10 @@ async def _set_cook_duration(
         raise HomeAssistantError(str(err)) from err
     if not has_callable(appliance, "send_attributes"):
         return False
-    return await appliance.send_attributes({attribute: str(seconds)})
+    if not await appliance.send_attributes({attribute: str(seconds)}):
+        return False
+    _set_raw_attribute_value(appliance, attribute, str(seconds))
+    return True
 
 
 def _raw_duration(appliance: Any, attribute: str) -> int | None:

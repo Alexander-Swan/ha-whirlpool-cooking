@@ -6,13 +6,14 @@ import re
 from typing import Any
 
 from .entity import has_callable
-from .sensor import _has_attribute, _raw_attribute_value
+from .sensor import _has_attribute, _raw_attribute_value, _set_raw_attribute_value
 
 ATTR_KITCHEN_TIMER_SET_TIME = "KitchenTimer01_SetTimeSet"
 ATTR_KITCHEN_TIMER_SET_OPERATIONS = "KitchenTimer01_SetOperations"
 ATTR_KITCHEN_TIMER_STATUS = "KitchenTimer01_StatusState"
 ATTR_KITCHEN_TIMER_TIME_REMAINING = "KitchenTimer01_StatusTimeRemaining"
 
+_DURATION_TEXT_RE = re.compile(r"(?:\d+\s*[hms]\s*)+", re.IGNORECASE)
 _DURATION_TOKEN_RE = re.compile(r"(?P<value>\d+)\s*(?P<unit>[hms])", re.IGNORECASE)
 
 
@@ -27,20 +28,29 @@ def kitchen_timer_supported(appliance: Any) -> bool:
 
 def kitchen_timer_duration(appliance: Any) -> int | None:
     """Return the configured kitchen timer duration in seconds."""
+    raw_duration = _positive_int(
+        _raw_attribute_value(appliance, ATTR_KITCHEN_TIMER_SET_TIME),
+    )
+    if raw_duration is not None:
+        return raw_duration
+
     timer = _kitchen_timer(appliance)
     if timer is not None and has_callable(timer, "get_total_time"):
         try:
             return _positive_int(timer.get_total_time())
         except Exception:
             return None
-    return _positive_int(_raw_attribute_value(appliance, ATTR_KITCHEN_TIMER_SET_TIME))
+    return None
 
 
 async def set_kitchen_timer_duration(appliance: Any, seconds: int) -> bool:
     """Set the configured kitchen timer duration without starting it."""
     if not has_callable(appliance, "send_attributes"):
         return False
-    return await appliance.send_attributes({ATTR_KITCHEN_TIMER_SET_TIME: str(seconds)})
+    if not await appliance.send_attributes({ATTR_KITCHEN_TIMER_SET_TIME: str(seconds)}):
+        return False
+    _set_raw_attribute_value(appliance, ATTR_KITCHEN_TIMER_SET_TIME, str(seconds))
+    return True
 
 
 async def start_kitchen_timer(appliance: Any) -> bool:
@@ -61,7 +71,10 @@ async def cancel_kitchen_timer(appliance: Any) -> bool:
     timer = _kitchen_timer(appliance)
     if timer is None:
         return False
-    return await timer.cancel_timer()
+    if not await timer.cancel_timer():
+        return False
+    _set_raw_attribute_value(appliance, ATTR_KITCHEN_TIMER_TIME_REMAINING, "0")
+    return True
 
 
 def parse_duration(value: str) -> int:
@@ -89,10 +102,11 @@ def parse_duration(value: str) -> int:
     if text.isdigit():
         return _validate_total_seconds(int(text))
 
+    if _DURATION_TEXT_RE.fullmatch(text) is None:
+        raise ValueError(f"Unsupported duration: {value}")
+
     total = 0
-    matched = False
     for match in _DURATION_TOKEN_RE.finditer(text):
-        matched = True
         amount = int(match.group("value"))
         unit = match.group("unit").lower()
         if unit == "h":
@@ -101,8 +115,6 @@ def parse_duration(value: str) -> int:
             total += amount * 60
         else:
             total += amount
-    if not matched:
-        raise ValueError(f"Unsupported duration: {value}")
     return _validate_total_seconds(total)
 
 
@@ -146,6 +158,6 @@ def _validate_duration(hours: int, minutes: int, seconds: int) -> int:
 
 def _validate_total_seconds(total: int) -> int:
     """Validate and return total seconds."""
-    if total <= 0:
-        raise ValueError("Duration must be greater than zero")
+    if total < 0:
+        raise ValueError("Duration cannot be negative")
     return total
