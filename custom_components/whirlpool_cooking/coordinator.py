@@ -121,13 +121,12 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
                 await result
         except Exception:
             _LOGGER.warning(
-                "Unable to connect Whirlpool push updates; falling back to polling",
+                "Unable to connect Whirlpool push updates; continuing with polling",
                 exc_info=True,
             )
             return
 
         self._push_connected = True
-        self.update_interval = None
 
 
 async def async_disconnect_manager(manager: Any) -> None:

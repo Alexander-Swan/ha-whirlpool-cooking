@@ -16,15 +16,15 @@ This project is an early test integration. The current implementation supports:
 
 - UI configuration by account, region, brand, and temperature display unit
 - discovery of Whirlpool cooking appliances from the unofficial 6th Sense API
-- push-style attribute updates when the library connection is available, with a
-  polling fallback if push setup fails
+- automatic polling refreshes, plus push-style attribute updates when the
+  library connection is available
 - oven cavity devices and entities for state, temperature, door, light, cook
   mode, target temperature, cook duration, and cook start/stop controls
 - kitchen timer duration, start, and cancel controls when timer operation
   attributes are reported by the appliance
 - microwave sensors plus hood light, microwave light, and multi-speed hood fan
   controls when those attributes are reported by the appliance
-- global appliance sensors, switches, diagnostics, and a manual refresh button
+- global appliance sensors, switches, and diagnostics
 
 Entity coverage depends on the attributes exposed by each appliance model. If a
 model does not report a backing Whirlpool attribute, the matching entity is not
@@ -51,7 +51,6 @@ For a two-cavity appliance, the integration should not also create a generic
 | Platform | Entity | Notes |
 | --- | --- | --- |
 | `binary_sensor` | Online | Connectivity state from `get_online()`. |
-| `button` | Refresh | Diagnostic button that requests a fresh cloud update. |
 | `text` | Kitchen timer duration | Created when the appliance reports `KitchenTimer01_SetTimeSet` and supports timer commands. Accepts values like `10:00`, `1:30:00`, `90`, or `1h 30m`. |
 | `button` | Start kitchen timer | Starts the kitchen timer using the configured duration. |
 | `button` | Cancel kitchen timer | Cancels the kitchen timer. |
@@ -257,8 +256,9 @@ Settings > Devices & services.
   `whirlpool-sixth-sense` library.
 - Entity mappings are based on observed and expected Whirlpool appliance
   attributes. Different models may expose different entities.
-- Push updates are used when the library can connect successfully. The
-  integration falls back to polling if push setup fails.
+- The integration refreshes from Whirlpool automatically. Push updates are used
+  when the library can connect successfully, and polling remains active as a
+  periodic backstop.
 - Some controls may be rejected by Whirlpool depending on appliance state,
   remote-control permissions, door state, or regional/model capability.
 - If setup succeeds but entities are empty or unavailable, download diagnostics

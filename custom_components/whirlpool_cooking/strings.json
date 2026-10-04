@@ -91,7 +91,6 @@
       "online": { "name": "Online" }
     },
     "button": {
-      "refresh": { "name": "Refresh" },
       "start_kitchen_timer": { "name": "Start kitchen timer" },
       "cancel_kitchen_timer": { "name": "Cancel kitchen timer" },
       "upper_start_cook": { "name": "Upper start cook" },

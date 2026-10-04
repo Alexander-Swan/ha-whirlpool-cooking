@@ -913,9 +913,7 @@ def test_missing_library_methods_skip_entities_and_log(
     assert _light_descriptions(appliance) == []
     assert _select_descriptions(appliance) == []
     assert _number_descriptions(appliance) == []
-    assert [description.key for description in _button_descriptions(appliance)] == [
-        "refresh",
-    ]
+    assert _button_descriptions(appliance) == []
     assert _switch_descriptions(appliance) == []
     assert _hood_fan_supported(appliance) is False
     assert "does not expose get_cavity_state" in caplog.text

@@ -9,7 +9,6 @@ from typing import Any
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -41,16 +40,6 @@ class WhirlpoolButtonDescription(ButtonEntityDescription):
     cavity: Any | None = None
 
 
-BUTTONS: tuple[WhirlpoolButtonDescription, ...] = (
-    WhirlpoolButtonDescription(
-        key="refresh",
-        translation_key="refresh",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        press_fn=lambda appliance, coordinator: _async_refresh(coordinator),
-    ),
-)
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -80,7 +69,6 @@ async def async_setup_entry(
 def _button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescription]:
     """Build button descriptions supported by an appliance."""
     return [
-        *BUTTONS,
         *_kitchen_timer_button_descriptions(appliance),
         *_cavity_button_descriptions(appliance),
     ]
@@ -175,11 +163,6 @@ def _cavity_button_descriptions(appliance: Any) -> list[WhirlpoolButtonDescripti
                 cavity_key,
             )
     return descriptions
-
-
-async def _async_refresh(coordinator: WhirlpoolCookingCoordinator) -> None:
-    """Refresh coordinator data."""
-    await coordinator.async_request_refresh()
 
 
 async def _async_start_kitchen_timer(

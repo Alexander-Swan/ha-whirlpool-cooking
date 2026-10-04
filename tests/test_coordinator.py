@@ -20,6 +20,7 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
 
     from custom_components.whirlpool_cooking.const import DOMAIN
     from custom_components.whirlpool_cooking.coordinator import (
+        SCAN_INTERVAL,
         WhirlpoolCookingCoordinator,
     )
 
@@ -52,7 +53,7 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
     manager.fetch_appliances.assert_awaited_once()
     manager.fetch_all_data.assert_awaited_once()
     manager.connect.assert_awaited_once()
-    assert coordinator.update_interval is None
+    assert coordinator.update_interval == SCAN_INTERVAL
 
 
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
@@ -87,7 +88,7 @@ async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
             await coordinator._async_update_data()
 
 
-async def test_coordinator_falls_back_to_polling_when_push_fails(hass) -> None:
+async def test_coordinator_continues_polling_when_push_fails(hass) -> None:
     """Test coordinator keeps polling if push connection fails."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
