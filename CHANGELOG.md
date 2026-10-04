@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Fixes kitchen timer and oven cook-duration updates so successful sends refresh
+  the local entity state immediately.
+- Allows `0` as a timer duration to clear cook timers and rejects unsupported
+  duration text instead of partially parsing it.
+
 ## 0.2.0
 
 - Adds oven cavity controls for cook mode, target temperature, start/stop, and
