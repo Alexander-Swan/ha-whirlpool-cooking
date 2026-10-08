@@ -10,7 +10,7 @@ from .const import PLATFORMS
 from .coordinator import WhirlpoolCookingCoordinator
 from .services import async_setup_services
 
-type WhirlpoolCookingConfigEntry = ConfigEntry[WhirlpoolCookingCoordinator]
+WhirlpoolCookingConfigEntry = ConfigEntry[WhirlpoolCookingCoordinator]
 
 
 async def async_setup_entry(

@@ -27,8 +27,8 @@ MODULES = (
 
 
 @pytest.mark.skipif(
-    sys.version_info < (3, 12),
-    reason="integration uses Python 3.12 type alias syntax",
+    sys.version_info < (3, 10),
+    reason="integration uses Python 3.10 annotation syntax",
 )
 @pytest.mark.parametrize("module", MODULES)
 def test_integration_modules_import(module: str) -> None:
