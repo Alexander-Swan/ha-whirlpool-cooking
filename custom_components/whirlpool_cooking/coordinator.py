@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from inspect import isawaitable
+from importlib import import_module
+from inspect import isawaitable, signature
 from typing import Any
 
 from aiohttp import ClientSession
@@ -177,6 +178,22 @@ async def _maybe_await(value: Any) -> Any:
 
 def _add_cooking_model_compat(manager: Any) -> None:
     """Teach older whirlpool-sixth-sense releases about known cooking models."""
+    for target in _manager_compat_targets(manager):
+        _add_cooking_model_compat_to_manager(target)
+
+
+def _manager_compat_targets(manager: Any) -> tuple[Any, ...]:
+    """Return upstream managers that may classify HTTP appliance payloads."""
+    targets = [manager]
+    for name in ("_http_appliances_manager",):
+        target = getattr(manager, name, None)
+        if target is not None:
+            targets.append(target)
+    return tuple(targets)
+
+
+def _add_cooking_model_compat_to_manager(manager: Any) -> None:
+    """Teach one upstream manager about known cooking models."""
     add_appliance = getattr(manager, "_add_appliance", None)
     if add_appliance is None:
         return
@@ -194,19 +211,9 @@ def _add_cooking_model_compat(manager: Any) -> None:
 
 def _add_oven_appliance(manager: Any, appliance: dict[str, Any]) -> None:
     """Register an appliance as an oven using the upstream library types."""
-    from whirlpool.oven import Oven
-    from whirlpool.types import ApplianceInfo
-
     data_model = appliance["DATA_MODEL_KEY"]
-    appliance_data = ApplianceInfo(
-        said=appliance["SAID"],
-        name=appliance["APPLIANCE_NAME"],
-        data_model=data_model,
-        category=appliance["CATEGORY_NAME"],
-        model_number=appliance.get("MODEL_NO", ""),
-        serial_number=appliance.get("SERIAL", ""),
-    )
-    manager._ovens[appliance_data.said] = Oven(
+    appliance_data = _appliance_info(appliance, data_model)
+    manager._ovens[appliance_data.said] = _oven_type(manager)(
         manager._backend_selector,
         manager._auth,
         manager._session,
@@ -214,6 +221,37 @@ def _add_oven_appliance(manager: Any, appliance: dict[str, Any]) -> None:
     )
     manager.__dict__.pop("all_appliances", None)
     _LOGGER.debug("Registered Whirlpool cooking appliance model %s", data_model)
+
+
+def _appliance_info(appliance: dict[str, Any], data_model: str) -> Any:
+    """Build ApplianceInfo across whirlpool-sixth-sense versions."""
+    from whirlpool.types import ApplianceInfo
+
+    kwargs = {
+        "said": appliance["SAID"],
+        "name": appliance["APPLIANCE_NAME"],
+        "category": appliance["CATEGORY_NAME"],
+        "model_number": appliance.get("MODEL_NO", ""),
+        "serial_number": appliance.get("SERIAL", ""),
+    }
+    if "data_model" in signature(ApplianceInfo).parameters:
+        kwargs["data_model"] = data_model
+    return ApplianceInfo(**kwargs)
+
+
+def _oven_type(manager: Any) -> Any:
+    """Return the Oven type that belongs to the upstream manager."""
+    module_name = type(manager).__module__
+    if ".appliancesmanager" in module_name:
+        try:
+            module = import_module(module_name.rsplit(".", 1)[0] + ".oven")
+            return module.Oven
+        except (ImportError, AttributeError):
+            pass
+
+    from whirlpool.oven import Oven
+
+    return Oven
 
 
 def _disconnect_is_noop(manager: Any) -> bool:

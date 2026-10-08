@@ -340,6 +340,84 @@ def test_unknown_cooking_model_uses_library_handler() -> None:
     assert manager.original_calls == [appliance]
 
 
+def test_known_cooking_model_is_registered_on_http_manager(monkeypatch) -> None:
+    """Test compatibility handles wrapped HTTP appliance managers."""
+    from custom_components.whirlpool_cooking.coordinator import (
+        _add_cooking_model_compat,
+    )
+
+    class ApplianceInfo:
+        def __init__(
+            self,
+            *,
+            said,
+            name,
+            category,
+            model_number,
+            serial_number,
+        ) -> None:
+            self.said = said
+            self.name = name
+            self.category = category
+            self.model_number = model_number
+            self.serial_number = serial_number
+
+    class Oven:
+        def __init__(self, backend_selector, auth, session, appliance_data) -> None:
+            self.backend_selector = backend_selector
+            self.auth = auth
+            self.session = session
+            self.appliance_data = appliance_data
+
+    oven_module = types.ModuleType("whirlpool.httpapi.oven")
+    oven_module.Oven = Oven
+    types_module = types.ModuleType("whirlpool.types")
+    types_module.ApplianceInfo = ApplianceInfo
+    whirlpool_module = types.ModuleType("whirlpool")
+    httpapi_module = types.ModuleType("whirlpool.httpapi")
+    httpapi_module.__path__ = []
+    monkeypatch.setitem(sys.modules, "whirlpool", whirlpool_module)
+    monkeypatch.setitem(sys.modules, "whirlpool.httpapi", httpapi_module)
+    monkeypatch.setitem(sys.modules, "whirlpool.httpapi.oven", oven_module)
+    monkeypatch.setitem(sys.modules, "whirlpool.types", types_module)
+
+    class HttpManager:
+        def __init__(self) -> None:
+            self._backend_selector = object()
+            self._auth = object()
+            self._session = object()
+            self._ovens = {}
+            self.original_calls = []
+            self.all_appliances = {}
+
+        def _add_appliance(self, appliance) -> None:
+            self.original_calls.append(appliance)
+
+    HttpManager.__module__ = "whirlpool.httpapi.appliancesmanager"
+
+    class Manager:
+        def __init__(self) -> None:
+            self._http_appliances_manager = HttpManager()
+
+    manager = Manager()
+    _add_cooking_model_compat(manager)
+
+    appliance = {
+        "SAID": "SAID123",
+        "APPLIANCE_NAME": "Kitchen Microwave",
+        "DATA_MODEL_KEY": "ddm_cooking_mhc76_v1",
+        "CATEGORY_NAME": "cooking",
+        "MODEL_NO": "MHC76",
+        "SERIAL": "SERIAL123",
+    }
+    http_manager = manager._http_appliances_manager
+    http_manager._add_appliance(appliance)
+
+    assert http_manager.original_calls == []
+    assert "all_appliances" not in http_manager.__dict__
+    assert http_manager._ovens["SAID123"].appliance_data.said == "SAID123"
+
+
 async def test_coordinator_shutdown_disconnects_manager(hass) -> None:
     """Test coordinator shutdown cleans up the active manager."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
