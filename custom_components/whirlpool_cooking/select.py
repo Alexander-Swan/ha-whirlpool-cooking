@@ -35,6 +35,7 @@ from .sensor import _cavity_exists, _has_attribute
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_POSTFIX_COOK_MODE = "CycleSetCommonMode"
 HOOD_FAN_OFF = "Off"
 HOOD_FAN_MODE_OPTIONS = [HOOD_FAN_OFF, *PRESET_MODES]
 OPTIMISTIC_OPTION_SECONDS = 15.0
@@ -108,7 +109,7 @@ def _hood_fan_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescrip
 def _cavity_select_descriptions(appliance: Any) -> list[WhirlpoolSelectDescription]:
     """Build oven cavity select controls."""
     try:
-        from whirlpool.oven import ATTR_POSTFIX_COOK_MODE, Cavity
+        from whirlpool.oven import Cavity
     except ModuleNotFoundError:
         _LOGGER.warning(
             "Whirlpool oven support is unavailable; skipping oven select controls",

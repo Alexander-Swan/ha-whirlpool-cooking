@@ -7,6 +7,8 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
+from . import cavity as cavity_helpers
+
 COOK_MODE_OPTIONS = (
     "Air Fry",
     "Bake",
@@ -46,9 +48,12 @@ def cook_mode_from_option(option: str) -> Any:
 
 def cook_mode_attribute_value(option: str) -> str:
     """Return the raw Whirlpool attribute value for a cook mode option."""
-    from whirlpool.oven import COOK_MODE_MAP
+    return str(cook_mode_from_option(option).value)
 
-    return COOK_MODE_MAP[cook_mode_from_option(option)]
+
+def cavity_attribute(cavity: Any, postfix: str) -> str:
+    """Return a raw Whirlpool cavity attribute name."""
+    return cavity_helpers.cavity_attribute(cavity, postfix)
 
 
 def supported_cook_mode_options(appliance: Any, cavity: Any) -> list[str]:
@@ -101,13 +106,6 @@ def set_pending_target_temperature(
     )
 
 
-def cavity_attribute(cavity: Any, postfix: str) -> str:
-    """Return a raw Whirlpool cavity attribute name."""
-    from whirlpool.oven import CAVITY_PREFIX_MAP
-
-    return f"{CAVITY_PREFIX_MAP[cavity]}_{postfix}"
-
-
 def enum_label(value: Any) -> str | None:
     """Return a display label for a Whirlpool enum value."""
     if value is None:
@@ -138,7 +136,7 @@ def _supported_modes_from_methods(appliance: Any, cavity: Any) -> list[Any]:
 
 def _supported_modes_from_capabilities(appliance: Any, cavity: Any) -> list[Any]:
     """Read supported cook modes from Whirlpool capability attributes."""
-    from whirlpool.oven import COOK_MODE_MAP
+    from whirlpool.oven import CookMode
 
     raw_modes: set[str] = set()
     cavity_name = str(getattr(cavity, "name", cavity)).lower()
@@ -161,7 +159,7 @@ def _supported_modes_from_capabilities(appliance: Any, cavity: Any) -> list[Any]
             continue
         raw_modes.update(_mode_values_from_payload(raw_value))
 
-    mode_by_value = {str(value): mode for mode, value in COOK_MODE_MAP.items()}
+    mode_by_value = {str(mode.value): mode for mode in CookMode}
     return [
         mode_by_value[raw_mode]
         for raw_mode in raw_modes

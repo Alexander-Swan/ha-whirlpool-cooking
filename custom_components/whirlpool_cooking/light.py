@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .cavity import cavity_device_key, cavity_device_name
+from .cavity import cavity_attribute, cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
@@ -27,6 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 ATTR_HOOD_SURFACE_LIGHT = "Hood_OperationSetSurfaceLight"
 ATTR_MICROWAVE_LIGHT = "Mwo_DisplaySetLightOn"
+ATTR_POSTFIX_LIGHT_STATUS = "DisplaySetLightOn"
 HOOD_LIGHT_MAX_LEVEL = 2
 HOOD_LIGHT_LOW_LEVEL = 2
 HOOD_LIGHT_HIGH_LEVEL = 4
@@ -81,13 +82,13 @@ def _light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription]:
 def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription]:
     """Build oven cavity light descriptions."""
     try:
-        from whirlpool.oven import ATTR_POSTFIX_LIGHT_STATUS, CAVITY_PREFIX_MAP, Cavity
+        from whirlpool.oven import Cavity
     except ModuleNotFoundError:
         return []
 
     descriptions: list[WhirlpoolLightDescription] = []
     for cavity in (Cavity.Upper, Cavity.Lower):
-        attribute = f"{CAVITY_PREFIX_MAP[cavity]}_{ATTR_POSTFIX_LIGHT_STATUS}"
+        attribute = cavity_attribute(cavity, ATTR_POSTFIX_LIGHT_STATUS)
         if not _cavity_exists(appliance, cavity) or not _has_attribute(
             appliance,
             attribute,

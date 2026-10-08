@@ -27,6 +27,8 @@ from .temperature import (
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_POSTFIX_TARGET_TEMP = "CycleSetTargetTemp"
+
 
 @dataclass(frozen=True, kw_only=True)
 class WhirlpoolNumberDescription(NumberEntityDescription):
@@ -71,7 +73,7 @@ def _number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescription]:
 def _cavity_number_descriptions(appliance: Any) -> list[WhirlpoolNumberDescription]:
     """Build oven cavity number controls."""
     try:
-        from whirlpool.oven import ATTR_POSTFIX_TARGET_TEMP, Cavity
+        from whirlpool.oven import Cavity
     except ModuleNotFoundError:
         _LOGGER.warning(
             "Whirlpool oven support is unavailable; skipping oven number controls",

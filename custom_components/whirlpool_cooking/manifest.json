@@ -15,5 +15,5 @@
   "requirements": [
     "whirlpool-sixth-sense>=0.18.0"
   ],
-  "version": "0.2.3"
+  "version": "0.2.4"
 }
