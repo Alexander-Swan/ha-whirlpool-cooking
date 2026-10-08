@@ -15,10 +15,14 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .cavity import cavity_device_key, cavity_device_name
-from .cooking import cavity_attribute, set_pending_target_temperature
+from .cooking import (
+    cavity_attribute,
+    get_pending_target_temperature,
+    set_pending_target_temperature,
+)
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
-from .sensor import _cavity_exists, _has_attribute
+from .sensor import _cavity_exists, _has_attribute, _set_raw_attribute_value
 from .temperature import (
     configured_temperature_unit,
     temperature_from_celsius,
@@ -147,7 +151,11 @@ def _target_temperature(appliance: Any, cavity: Any) -> float | None:
 
 async def _send_temperature(appliance: Any, attribute: str, value: float) -> bool:
     """Send a target temperature attribute."""
-    return await appliance.send_attributes({attribute: str(round(value * 10))})
+    raw_value = str(round(value * 10))
+    if not await appliance.send_attributes({attribute: raw_value}):
+        return False
+    _set_raw_attribute_value(appliance, attribute, raw_value)
+    return True
 
 
 class WhirlpoolCookingNumber(WhirlpoolCookingEntity, NumberEntity):
@@ -174,7 +182,9 @@ class WhirlpoolCookingNumber(WhirlpoolCookingEntity, NumberEntity):
     @property
     def native_value(self) -> float | None:
         """Return the current number value."""
-        value = self.entity_description.value_fn(self.appliance)
+        value = self._pending_native_value()
+        if value is None:
+            value = self.entity_description.value_fn(self.appliance)
         if self._is_temperature:
             return temperature_from_celsius(self.coordinator.config_entry, value)
         return value
@@ -226,4 +236,13 @@ class WhirlpoolCookingNumber(WhirlpoolCookingEntity, NumberEntity):
         return (
             self.entity_description.native_unit_of_measurement
             == UnitOfTemperature.CELSIUS
+        )
+
+    def _pending_native_value(self) -> float | None:
+        """Return a recent HA-side temperature setting, when present."""
+        if not self._is_temperature or self.entity_description.cavity is None:
+            return None
+        return get_pending_target_temperature(
+            self.appliance,
+            self.entity_description.cavity,
         )

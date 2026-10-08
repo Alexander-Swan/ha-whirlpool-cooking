@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -21,7 +22,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .cavity import cavity_attribute, cavity_device_key, cavity_device_name
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
-from .sensor import _cavity_exists, _has_attribute, _raw_attribute_value
+from .sensor import (
+    _cavity_exists,
+    _has_attribute,
+    _raw_attribute_value,
+    _set_raw_attribute_value,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +37,7 @@ ATTR_POSTFIX_LIGHT_STATUS = "DisplaySetLightOn"
 HOOD_LIGHT_MAX_LEVEL = 2
 HOOD_LIGHT_LOW_LEVEL = 2
 HOOD_LIGHT_HIGH_LEVEL = 4
+OPTIMISTIC_STATE_SECONDS = 30.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -43,6 +50,7 @@ class WhirlpoolLightDescription(LightEntityDescription):
     set_brightness_fn: Callable[[Any, int], Awaitable[bool]] | None = None
     max_level: int | None = None
     cavity: Any | None = None
+    state_attribute: str | None = None
 
 
 async def async_setup_entry(
@@ -108,6 +116,7 @@ def _cavity_light_descriptions(appliance: Any) -> list[WhirlpoolLightDescription
                 key=f"{cavity_key}_light",
                 translation_key=f"{cavity_key}_light",
                 cavity=cavity,
+                state_attribute=attribute,
                 value_fn=lambda item, attr=attribute: _raw_bool(item, attr),
                 set_fn=lambda item, on, oven_cavity=cavity: item.set_light(
                     on,
@@ -140,6 +149,7 @@ def _microwave_light_descriptions(
             WhirlpoolLightDescription(
                 key="microwave_light",
                 translation_key="microwave_light",
+                state_attribute=ATTR_MICROWAVE_LIGHT,
                 value_fn=lambda item: _raw_bool(item, ATTR_MICROWAVE_LIGHT),
                 set_fn=lambda item, on: _send_bool(item, ATTR_MICROWAVE_LIGHT, on),
             ),
@@ -221,12 +231,20 @@ def _level_for_brightness(
 
 async def _send_bool(appliance: Any, attribute: str, on: bool) -> bool:
     """Send a raw Whirlpool boolean attribute."""
-    return await appliance.send_attributes({attribute: "1" if on else "0"})
+    value = "1" if on else "0"
+    if not await appliance.send_attributes({attribute: value}):
+        return False
+    _set_raw_attribute_value(appliance, attribute, value)
+    return True
 
 
 async def _send_level(appliance: Any, attribute: str, level: int) -> bool:
     """Send a raw Whirlpool level attribute."""
-    return await appliance.send_attributes({attribute: str(level)})
+    value = str(level)
+    if not await appliance.send_attributes({attribute: value}):
+        return False
+    _set_raw_attribute_value(appliance, attribute, value)
+    return True
 
 
 class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
@@ -249,10 +267,20 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
             device_name=cavity_device_name(appliance, description.cavity),
         )
         self.entity_description = description
+        self._optimistic_is_on: bool | None = None
+        self._optimistic_brightness: int | None = None
+        self._optimistic_until = 0.0
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the light is on."""
+        if (
+            self._optimistic_is_on is not None
+            and time.monotonic() < self._optimistic_until
+        ):
+            return self._optimistic_is_on
+        self._optimistic_is_on = None
+        self._optimistic_brightness = None
         return self.entity_description.value_fn(self.appliance)
 
     @property
@@ -274,6 +302,11 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
     @property
     def brightness(self) -> int | None:
         """Return current brightness for level-capable lights."""
+        if (
+            self._optimistic_brightness is not None
+            and time.monotonic() < self._optimistic_until
+        ):
+            return self._optimistic_brightness
         if self.entity_description.brightness_fn is None:
             return None
         return self.entity_description.brightness_fn(self.appliance)
@@ -290,6 +323,7 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
                 int(brightness),
             ):
                 raise HomeAssistantError("Whirlpool rejected the light command")
+            self._set_optimistic_state(True, int(brightness))
             await self.coordinator.async_request_refresh()
             return
         await self._async_set(True)
@@ -302,4 +336,25 @@ class WhirlpoolCookingLight(WhirlpoolCookingEntity, LightEntity):
         """Set the light and refresh appliance data."""
         if not await self.entity_description.set_fn(self.appliance, on):
             raise HomeAssistantError("Whirlpool rejected the light command")
+        if (
+            self.entity_description.state_attribute is not None
+            and self.entity_description.max_level is None
+        ):
+            _set_raw_attribute_value(
+                self.appliance,
+                self.entity_description.state_attribute,
+                "1" if on else "0",
+            )
+        self._set_optimistic_state(on)
         await self.coordinator.async_request_refresh()
+
+    def _set_optimistic_state(
+        self,
+        is_on: bool,
+        brightness: int | None = None,
+    ) -> None:
+        """Keep HA state responsive while Whirlpool cloud state catches up."""
+        self._optimistic_is_on = is_on
+        self._optimistic_brightness = brightness
+        self._optimistic_until = time.monotonic() + OPTIMISTIC_STATE_SECONDS
+        self.async_write_ha_state()

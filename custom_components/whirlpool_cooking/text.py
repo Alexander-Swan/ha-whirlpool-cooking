@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -32,6 +33,8 @@ from .timer import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+OPTIMISTIC_STATE_SECONDS = 30.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -180,14 +183,25 @@ class WhirlpoolCookingText(WhirlpoolCookingEntity, TextEntity):
             device_name=cavity_device_name(appliance, description.cavity),
         )
         self.entity_description = description
+        self._optimistic_value: str | None = None
+        self._optimistic_until = 0.0
 
     @property
     def native_value(self) -> str | None:
         """Return the current text value."""
+        if (
+            self._optimistic_value is not None
+            and time.monotonic() < self._optimistic_until
+        ):
+            return self._optimistic_value
+        self._optimistic_value = None
         return self.entity_description.value_fn(self.appliance)
 
     async def async_set_value(self, value: str) -> None:
         """Set the text value."""
         if not await self.entity_description.set_fn(self.appliance, value):
             raise HomeAssistantError("Whirlpool rejected the text command")
+        self._optimistic_value = self.entity_description.value_fn(self.appliance)
+        self._optimistic_until = time.monotonic() + OPTIMISTIC_STATE_SECONDS
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

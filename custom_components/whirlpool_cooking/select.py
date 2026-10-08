@@ -224,13 +224,18 @@ def _current_hood_fan_mode(appliance: Any) -> str | None:
 
 async def _send_hood_fan_mode(appliance: Any, option: str) -> bool:
     """Send a Whirlpool hood fan mode."""
+    from .sensor import _set_raw_attribute_value
+
     if option == HOOD_FAN_OFF:
         speed = "0"
     else:
         speed = PRESET_MODE_TO_SPEED.get(option)
     if speed is None:
         raise HomeAssistantError(f"Unsupported Whirlpool fan mode: {option}")
-    return await appliance.send_attributes({ATTR_HOOD_FAN_SPEED: speed})
+    if not await appliance.send_attributes({ATTR_HOOD_FAN_SPEED: speed}):
+        return False
+    _set_raw_attribute_value(appliance, ATTR_HOOD_FAN_SPEED, speed)
+    return True
 
 
 def _hood_fan_speed(appliance: Any) -> int | None:
@@ -277,10 +282,7 @@ class WhirlpoolCookingSelect(WhirlpoolCookingEntity, SelectEntity):
             self._optimistic_option in self.entity_description.options
             and time.monotonic() < self._optimistic_option_until
         ):
-            if (
-                current_option in self.entity_description.options
-                and current_option != self._optimistic_option
-            ):
+            if current_option == self._optimistic_option:
                 self._optimistic_option = None
                 return current_option
             return self._optimistic_option

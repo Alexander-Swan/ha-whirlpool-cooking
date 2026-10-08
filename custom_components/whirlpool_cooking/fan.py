@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -13,12 +14,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import WhirlpoolCookingCoordinator
 from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
-from .sensor import _has_attribute, _raw_attribute_value
+from .sensor import _has_attribute, _raw_attribute_value, _set_raw_attribute_value
 
 _LOGGER = logging.getLogger(__name__)
 
 ATTR_HOOD_FAN_SPEED = "Hood_OperationSetExhaustFanSpeed"
 HOOD_FAN_MAX_SPEED = 4
+OPTIMISTIC_STATE_SECONDS = 30.0
 
 SPEED_TO_PRESET_MODE = {
     2: "Low",
@@ -105,17 +107,19 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
     ) -> None:
         """Initialize the fan."""
         super().__init__(coordinator, appliance, "hood_fan")
+        self._optimistic_speed: int | None = None
+        self._optimistic_until = 0.0
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the fan is on."""
-        speed = _speed_value(self.appliance)
+        speed = self._speed_value()
         return None if speed is None else speed > 0
 
     @property
     def percentage(self) -> int | None:
         """Return current fan percentage."""
-        speed = _speed_value(self.appliance)
+        speed = self._speed_value()
         if speed is None:
             return None
         return SPEED_TO_PERCENTAGE.get(speed, 0 if speed <= 0 else None)
@@ -123,7 +127,7 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
     @property
     def preset_mode(self) -> str | None:
         """Return current fan preset mode."""
-        speed = _speed_value(self.appliance)
+        speed = self._speed_value()
         if speed is None or speed <= 0:
             return None
         return SPEED_TO_PRESET_MODE.get(speed)
@@ -161,7 +165,29 @@ class WhirlpoolCookingHoodFan(WhirlpoolCookingEntity, FanEntity):
             {ATTR_HOOD_FAN_SPEED: speed},
         ):
             raise HomeAssistantError("Whirlpool rejected the fan command")
+        _set_raw_attribute_value(self.appliance, ATTR_HOOD_FAN_SPEED, speed)
+        self._set_optimistic_speed(speed)
         await self.coordinator.async_request_refresh()
+
+    def _speed_value(self) -> int | None:
+        """Return current fan speed, including recent accepted commands."""
+        if (
+            self._optimistic_speed is not None
+            and time.monotonic() < self._optimistic_until
+        ):
+            return self._optimistic_speed
+        self._optimistic_speed = None
+        return _speed_value(self.appliance)
+
+    def _set_optimistic_speed(self, speed: str) -> None:
+        """Keep HA state responsive while Whirlpool cloud state catches up."""
+        try:
+            self._optimistic_speed = int(speed)
+        except ValueError:
+            self._optimistic_speed = None
+            return
+        self._optimistic_until = time.monotonic() + OPTIMISTIC_STATE_SECONDS
+        self.async_write_ha_state()
 
 
 def _speed_value(appliance: Any) -> int | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +19,8 @@ from .entity import WhirlpoolCookingEntity, appliance_label, has_callable
 from .sensor import _has_attribute
 
 _LOGGER = logging.getLogger(__name__)
+
+OPTIMISTIC_STATE_SECONDS = 30.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -140,10 +143,18 @@ class WhirlpoolCookingSwitch(WhirlpoolCookingEntity, SwitchEntity):
         """Initialize the switch."""
         super().__init__(coordinator, appliance, description.key)
         self.entity_description = description
+        self._optimistic_is_on: bool | None = None
+        self._optimistic_until = 0.0
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
+        if (
+            self._optimistic_is_on is not None
+            and time.monotonic() < self._optimistic_until
+        ):
+            return self._optimistic_is_on
+        self._optimistic_is_on = None
         return self.entity_description.value_fn(self.appliance)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -162,4 +173,7 @@ class WhirlpoolCookingSwitch(WhirlpoolCookingEntity, SwitchEntity):
             raise HomeAssistantError("Whirlpool switch command failed") from err
         if not result:
             raise HomeAssistantError("Whirlpool rejected the switch command")
+        self._optimistic_is_on = on
+        self._optimistic_until = time.monotonic() + OPTIMISTIC_STATE_SECONDS
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

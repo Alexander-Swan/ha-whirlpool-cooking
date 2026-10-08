@@ -274,6 +274,7 @@ def test_single_cavity_oven_stays_on_base_device(monkeypatch) -> None:
 
 def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
     """Oven cavities should create cook mode, target temp, and start buttons."""
+    import asyncio
     from enum import Enum
 
     from custom_components.whirlpool_cooking.button import _button_descriptions
@@ -367,6 +368,7 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
             return (CookMode.Bake, CookMode.ConvectBake, CookMode.KeepWarm)
 
         async def send_attributes(self, attributes) -> bool:
+            self.sent = attributes
             return True
 
         async def set_cook(self, target_temp, mode, cavity) -> bool:
@@ -417,6 +419,16 @@ def test_oven_cavities_get_cook_control_entities(monkeypatch) -> None:
         "Keep Warm",
     ]
     assert _select_descriptions(appliance)[0].current_fn(appliance) == "Bake"
+    number_description = _number_descriptions(appliance)[0]
+    assert number_description.value_fn(appliance) == 175
+    asyncio.run(number_description.set_fn(appliance, 204.4))
+    assert appliance.sent == {"OvenUpperCavity_CycleSetTargetTemp": "2044"}
+    assert (
+        appliance._data_dict["attributes"]["OvenUpperCavity_CycleSetTargetTemp"][
+            "value"
+        ]
+        == "2044"
+    )
     assert "upper_start_cook" in [
         description.key for description in _button_descriptions(appliance)
     ]
@@ -601,10 +613,21 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
     assert _level_for_brightness(128, 2, high_level=4) == 2
     assert _level_for_brightness(255, 2, high_level=4) == 4
 
+    asyncio.run(light_descriptions[0].set_fn(appliance, True))
+    assert appliance.sent == {"Mwo_DisplaySetLightOn": "1"}
+    assert appliance._data_dict["attributes"]["Mwo_DisplaySetLightOn"]["value"] == "1"
     asyncio.run(light_descriptions[1].set_fn(appliance, True))
     assert appliance.sent == {"Hood_OperationSetSurfaceLight": "4"}
+    assert (
+        appliance._data_dict["attributes"]["Hood_OperationSetSurfaceLight"]["value"]
+        == "4"
+    )
     asyncio.run(light_descriptions[1].set_brightness_fn(appliance, 128))
     assert appliance.sent == {"Hood_OperationSetSurfaceLight": "2"}
+    assert (
+        appliance._data_dict["attributes"]["Hood_OperationSetSurfaceLight"]["value"]
+        == "2"
+    )
     assert ATTR_HOOD_FAN_SPEED in appliance._data_dict["attributes"]
     assert _speed_value(appliance) == 4
     assert SPEED_TO_PRESET_MODE[4] == "Medium"
@@ -616,8 +639,10 @@ def test_microwave_gets_hood_light_and_fan_entities() -> None:
 
     asyncio.run(select_descriptions[0].select_fn(appliance, "Medium"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "4"}
+    assert appliance._data_dict["attributes"][ATTR_HOOD_FAN_SPEED]["value"] == "4"
     asyncio.run(select_descriptions[0].select_fn(appliance, "Medium-high"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "5"}
+    assert appliance._data_dict["attributes"][ATTR_HOOD_FAN_SPEED]["value"] == "5"
     asyncio.run(select_descriptions[0].select_fn(appliance, "High"))
     assert appliance.sent == {ATTR_HOOD_FAN_SPEED: "6"}
     asyncio.run(select_descriptions[0].select_fn(appliance, "Off"))
