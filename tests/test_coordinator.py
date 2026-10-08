@@ -56,6 +56,49 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
     assert coordinator.update_interval == SCAN_INTERVAL
 
 
+async def test_coordinator_supports_connect_only_manager_api(hass) -> None:
+    """Test coordinator supports newer manager versions without fetch_appliances."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import DOMAIN
+    from custom_components.whirlpool_cooking.coordinator import (
+        WhirlpoolCookingCoordinator,
+    )
+
+    oven = object()
+    microwave = object()
+
+    class Manager:
+        def __init__(self) -> None:
+            self.ovens = [oven]
+            self.microwaves = [microwave]
+            self.appliances = []
+            self.connect = AsyncMock(return_value=True)
+
+    manager = Manager()
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "cook@example.com",
+            "password": "secret",
+            "region": "US",
+            "brand": "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.whirlpool_cooking.coordinator.build_appliance_manager",
+        return_value=manager,
+    ):
+        coordinator = WhirlpoolCookingCoordinator(hass, entry)
+        data = await coordinator._async_update_data()
+
+    assert data == [oven, microwave]
+    manager.connect.assert_awaited_once()
+    assert coordinator._push_connected is True
+
+
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
     """Test coordinator surfaces fetch failures."""
     from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -68,6 +111,43 @@ async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
 
     manager = AsyncMock()
     manager.fetch_appliances.return_value = False
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "cook@example.com",
+            "password": "secret",
+            "region": "US",
+            "brand": "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.whirlpool_cooking.coordinator.build_appliance_manager",
+        return_value=manager,
+    ):
+        coordinator = WhirlpoolCookingCoordinator(hass, entry)
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+
+async def test_coordinator_connect_only_manager_failed_connect_requests_reauth(
+    hass,
+) -> None:
+    """Test failed connect-only manager setup requests reauthentication."""
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import DOMAIN
+    from custom_components.whirlpool_cooking.coordinator import (
+        WhirlpoolCookingCoordinator,
+    )
+
+    class Manager:
+        def __init__(self) -> None:
+            self.connect = AsyncMock(return_value=False)
+
+    manager = Manager()
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={

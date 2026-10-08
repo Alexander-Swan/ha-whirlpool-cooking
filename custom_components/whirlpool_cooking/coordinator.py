@@ -60,6 +60,26 @@ async def build_appliance_manager(
     return manager
 
 
+async def async_prepare_manager(manager: Any) -> bool:
+    """Fetch appliance data using the available upstream manager API."""
+    fetch_appliances = getattr(manager, "fetch_appliances", None)
+    if fetch_appliances is not None:
+        if not await _maybe_await(fetch_appliances()):
+            return False
+
+        fetch_all_data = getattr(manager, "fetch_all_data", None)
+        if fetch_all_data is not None:
+            await _maybe_await(fetch_all_data())
+        return True
+
+    connect = getattr(manager, "connect", None)
+    if connect is None:
+        raise UpdateFailed("Whirlpool appliance manager has no supported fetch API")
+
+    result = await _maybe_await(connect())
+    return result is not False
+
+
 class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
     """Coordinate Whirlpool Cooking appliance updates."""
 
@@ -87,11 +107,13 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
                     self.config_entry.data,
                 )
 
-            if not await self._manager.fetch_appliances():
+            if not await async_prepare_manager(self._manager):
                 raise ConfigEntryAuthFailed("Unable to fetch Whirlpool appliances")
 
-            await self._manager.fetch_all_data()
-            await self._async_connect_push_updates()
+            if hasattr(self._manager, "fetch_appliances"):
+                await self._async_connect_push_updates()
+            else:
+                self._push_connected = True
 
             appliances = [
                 *getattr(self._manager, "ovens", []),
@@ -144,6 +166,13 @@ async def async_disconnect_manager(manager: Any) -> None:
     result = disconnect()
     if isawaitable(result):
         await result
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Await a value only when the upstream API returned an awaitable."""
+    if isawaitable(value):
+        return await value
+    return value
 
 
 def _add_cooking_model_compat(manager: Any) -> None:

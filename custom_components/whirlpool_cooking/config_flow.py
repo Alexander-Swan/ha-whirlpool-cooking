@@ -21,7 +21,11 @@ from .const import (
     TEMP_UNIT_CELSIUS,
     TEMP_UNITS,
 )
-from .coordinator import async_disconnect_manager, build_appliance_manager
+from .coordinator import (
+    async_disconnect_manager,
+    async_prepare_manager,
+    build_appliance_manager,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -112,7 +116,7 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             session = async_get_clientsession(self.hass)
             manager = await build_appliance_manager(session, user_input)
-            if not await manager.fetch_appliances():
+            if not await async_prepare_manager(manager):
                 _LOGGER.warning(
                     "Whirlpool setup connected but could not fetch appliances "
                     "for brand=%s region=%s username=%s",
