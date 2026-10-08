@@ -58,7 +58,7 @@ async def test_coordinator_combines_ovens_and_microwaves(hass) -> None:
 
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
     """Test coordinator surfaces fetch failures."""
-    from homeassistant.helpers.update_coordinator import UpdateFailed
+    from homeassistant.exceptions import ConfigEntryAuthFailed
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.whirlpool_cooking.const import DOMAIN
@@ -84,7 +84,7 @@ async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
         return_value=manager,
     ):
         coordinator = WhirlpoolCookingCoordinator(hass, entry)
-        with pytest.raises(UpdateFailed):
+        with pytest.raises(ConfigEntryAuthFailed):
             await coordinator._async_update_data()
 
 

@@ -208,3 +208,113 @@ async def test_config_flow_duplicate_account_aborts(hass) -> None:
 
     assert result["type"] is data_entry_flow.FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_reauth_updates_password_and_reloads_entry(hass) -> None:
+    """Test reauth updates an existing entry without recreating it."""
+    from homeassistant import config_entries, data_entry_flow
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import (
+        CONF_BRAND,
+        CONF_REGION,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Whirlpool Cooking",
+        unique_id="whirlpool_US_cook@example.com",
+        data={
+            "username": "cook@example.com",
+            "password": "old-secret",
+            CONF_REGION: "US",
+            CONF_BRAND: "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+    manager = AsyncMock()
+    manager.fetch_appliances.return_value = [object()]
+
+    with (
+        patch(
+            "custom_components.whirlpool_cooking.config_flow.build_appliance_manager",
+            return_value=manager,
+        ),
+        patch.object(hass.config_entries, "async_reload", return_value=True) as reload,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_REAUTH,
+                "entry_id": entry.entry_id,
+            },
+            data=entry.data,
+        )
+
+        assert result["type"] is data_entry_flow.FlowResultType.FORM
+        assert result["step_id"] == "reauth_confirm"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "new-secret"},
+        )
+
+    assert result["type"] is data_entry_flow.FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["password"] == "new-secret"
+    assert entry.data["username"] == "cook@example.com"
+    manager.fetch_appliances.assert_awaited_once()
+    manager.disconnect.assert_called_once()
+    reload.assert_awaited_once_with(entry.entry_id)
+
+
+async def test_reauth_invalid_password_shows_form_error(hass) -> None:
+    """Test failed reauth keeps the user on the reauth form."""
+    from homeassistant import config_entries, data_entry_flow
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.whirlpool_cooking.const import (
+        CONF_BRAND,
+        CONF_REGION,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Whirlpool Cooking",
+        unique_id="whirlpool_US_cook@example.com",
+        data={
+            "username": "cook@example.com",
+            "password": "old-secret",
+            CONF_REGION: "US",
+            CONF_BRAND: "whirlpool",
+        },
+    )
+    entry.add_to_hass(hass)
+    manager = AsyncMock()
+    manager.fetch_appliances.return_value = []
+
+    with patch(
+        "custom_components.whirlpool_cooking.config_flow.build_appliance_manager",
+        return_value=manager,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_REAUTH,
+                "entry_id": entry.entry_id,
+            },
+            data=entry.data,
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "bad-secret"},
+        )
+
+    assert result["type"] is data_entry_flow.FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data["password"] == "old-secret"
+    manager.disconnect.assert_called_once()

@@ -10,6 +10,13 @@
           "region": "Region",
           "brand": "Brand"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Whirlpool Cooking",
+        "description": "Enter the current password for your Whirlpool-family account.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {

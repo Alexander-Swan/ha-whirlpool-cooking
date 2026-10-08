@@ -11,6 +11,7 @@ from aiohttp import ClientSession
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -87,7 +88,7 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
                 )
 
             if not await self._manager.fetch_appliances():
-                raise UpdateFailed("Unable to fetch Whirlpool appliances")
+                raise ConfigEntryAuthFailed("Unable to fetch Whirlpool appliances")
 
             await self._manager.fetch_all_data()
             await self._async_connect_push_updates()
@@ -97,6 +98,8 @@ class WhirlpoolCookingCoordinator(DataUpdateCoordinator[list[Any]]):
                 *getattr(self._manager, "microwaves", []),
             ]
             _log_unsupported_models(self._manager)
+        except ConfigEntryAuthFailed:
+            raise
         except Exception as err:
             raise UpdateFailed(str(err)) from err
         return appliances

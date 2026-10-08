@@ -48,56 +48,15 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(
-                f"{user_input[CONF_BRAND]}_{user_input[CONF_REGION]}_{user_input[CONF_USERNAME]}",
-            )
+            await self.async_set_unique_id(_unique_id(user_input))
             self._abort_if_unique_id_configured()
 
-            manager: Any | None = None
-            try:
-                session = async_get_clientsession(self.hass)
-                manager = await build_appliance_manager(session, user_input)
-                if not await manager.fetch_appliances():
-                    _LOGGER.warning(
-                        "Whirlpool setup connected but could not fetch appliances "
-                        "for brand=%s region=%s username=%s",
-                        user_input[CONF_BRAND],
-                        user_input[CONF_REGION],
-                        user_input[CONF_USERNAME],
-                    )
-                    errors["base"] = "cannot_connect"
-            except ClientError as err:
-                _LOGGER.warning(
-                    "Whirlpool setup failed while connecting for brand=%s "
-                    "region=%s username=%s: %s",
-                    user_input[CONF_BRAND],
-                    user_input[CONF_REGION],
-                    user_input[CONF_USERNAME],
-                    err,
+            errors = await self._async_validate_input(user_input)
+            if not errors:
+                return self.async_create_entry(
+                    title=f"{user_input[CONF_BRAND].title()} Cooking",
+                    data=user_input,
                 )
-                errors["base"] = "cannot_connect"
-            except Exception as err:
-                if type(err).__name__ == "AccountLockedError":
-                    _LOGGER.warning(
-                        "Whirlpool account is locked for brand=%s region=%s "
-                        "username=%s",
-                        user_input[CONF_BRAND],
-                        user_input[CONF_REGION],
-                        user_input[CONF_USERNAME],
-                    )
-                    errors["base"] = ERR_ACCOUNT_LOCKED
-                else:
-                    _LOGGER.exception("Unexpected Whirlpool Cooking setup failure")
-                    errors["base"] = "unknown"
-            else:
-                if not errors:
-                    return self.async_create_entry(
-                        title=f"{user_input[CONF_BRAND].title()} Cooking",
-                        data=user_input,
-                    )
-            finally:
-                if manager is not None:
-                    await async_disconnect_manager(manager)
 
         return self.async_show_form(
             step_id="user",
@@ -111,6 +70,84 @@ class WhirlpoolCookingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+    async def async_step_reauth(
+        self,
+        entry_data: dict[str, Any],
+    ) -> config_entries.ConfigFlowResult:
+        """Handle a Whirlpool credential refresh."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Ask the user to re-enter Whirlpool credentials."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            new_data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
+
+            errors = await self._async_validate_input(new_data)
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data=new_data,
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PASSWORD): str,
+                },
+            ),
+            errors=errors,
+        )
+
+    async def _async_validate_input(self, user_input: dict[str, Any]) -> dict[str, str]:
+        """Validate Whirlpool credentials and appliance access."""
+        manager: Any | None = None
+        try:
+            session = async_get_clientsession(self.hass)
+            manager = await build_appliance_manager(session, user_input)
+            if not await manager.fetch_appliances():
+                _LOGGER.warning(
+                    "Whirlpool setup connected but could not fetch appliances "
+                    "for brand=%s region=%s username=%s",
+                    user_input[CONF_BRAND],
+                    user_input[CONF_REGION],
+                    user_input[CONF_USERNAME],
+                )
+                return {"base": "cannot_connect"}
+        except ClientError as err:
+            _LOGGER.warning(
+                "Whirlpool setup failed while connecting for brand=%s "
+                "region=%s username=%s: %s",
+                user_input[CONF_BRAND],
+                user_input[CONF_REGION],
+                user_input[CONF_USERNAME],
+                err,
+            )
+            return {"base": "cannot_connect"}
+        except Exception as err:
+            if type(err).__name__ == "AccountLockedError":
+                _LOGGER.warning(
+                    "Whirlpool account is locked for brand=%s region=%s username=%s",
+                    user_input[CONF_BRAND],
+                    user_input[CONF_REGION],
+                    user_input[CONF_USERNAME],
+                )
+                return {"base": ERR_ACCOUNT_LOCKED}
+
+            _LOGGER.exception("Unexpected Whirlpool Cooking setup failure")
+            return {"base": "unknown"}
+        finally:
+            if manager is not None:
+                await async_disconnect_manager(manager)
+
+        return {}
 
 
 class WhirlpoolCookingOptionsFlow(config_entries.OptionsFlow):
@@ -142,3 +179,8 @@ class WhirlpoolCookingOptionsFlow(config_entries.OptionsFlow):
                 },
             ),
         )
+
+
+def _unique_id(data: dict[str, Any]) -> str:
+    """Return the stable account unique ID."""
+    return f"{data[CONF_BRAND]}_{data[CONF_REGION]}_{data[CONF_USERNAME]}"
