@@ -101,7 +101,7 @@ async def test_coordinator_supports_connect_only_manager_api(hass) -> None:
 
 async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
     """Test coordinator surfaces fetch failures."""
-    from homeassistant.exceptions import ConfigEntryAuthFailed
+    from homeassistant.helpers.update_coordinator import UpdateFailed
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.whirlpool_cooking.const import DOMAIN
@@ -127,15 +127,15 @@ async def test_coordinator_failed_fetch_raises_update_failed(hass) -> None:
         return_value=manager,
     ):
         coordinator = WhirlpoolCookingCoordinator(hass, entry)
-        with pytest.raises(ConfigEntryAuthFailed):
+        with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
 
 
-async def test_coordinator_connect_only_manager_failed_connect_requests_reauth(
+async def test_coordinator_connect_only_manager_failed_connect_retries(
     hass,
 ) -> None:
-    """Test failed connect-only manager setup requests reauthentication."""
-    from homeassistant.exceptions import ConfigEntryAuthFailed
+    """Test failed connect-only manager setup is retryable."""
+    from homeassistant.helpers.update_coordinator import UpdateFailed
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.whirlpool_cooking.const import DOMAIN
@@ -164,7 +164,7 @@ async def test_coordinator_connect_only_manager_failed_connect_requests_reauth(
         return_value=manager,
     ):
         coordinator = WhirlpoolCookingCoordinator(hass, entry)
-        with pytest.raises(ConfigEntryAuthFailed):
+        with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
 
 
